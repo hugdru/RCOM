@@ -27,7 +27,7 @@ default: $(OUT)
 
 # not valid for c++ -Wconversion-extra -Wnested-externs -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
 # -Wpadded
-debug: CCFLAGS = -std=c11 -ggdb -Wall -Wextra -pedantic -Wdouble-promotion -Wshadow -Wfloat-equal -Wcast-align -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wuseless-cast -Wlogical-op -Wmissing-declarations -Wredundant-decls -Wdisabled-optimization -Wstack-protector -Winline -Wswitch-default -Wswitch-enum -Wconversion-extra -Wnexted-externs -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes -Wpadded
+debug: CCFLAGS = -std=c11 -ggdb -Wall -Wextra -pedantic -Wdouble-promotion -Wshadow -Wfloat-equal -Wcast-align -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wlogical-op -Wmissing-declarations -Wredundant-decls -Wdisabled-optimization -Wstack-protector -Winline -Wswitch-default -Wswitch-enum -Wnested-externs -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes -Wpadded
 
 debug: $(OUT)
 
