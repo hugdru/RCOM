@@ -6,6 +6,12 @@
 #include <termios.h>
 #include <stdio.h>
 #include <signal.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <strings.h>
+#include <string.h>
 
 #define BAUDRATE B38400
 #define MODEMDEVICE "/dev/ttyS1"
@@ -17,21 +23,29 @@
 #define F 0x7e
 #define A 0x03
 #define C 0x03
+#define B A^C
 
-volatile int STOP=FALSE;
-int flag = 1, tries = 0; // alarm/signal
+#define TIMEOUT 3
 
-int controlledWrite( int fd, uint8_t *packetBundle, int nPackets);
-void alarm_handler();
+typedef enum { false, true } bool;
+volatile int STOP = FALSE;
+static bool alarmed = false;
+static uint8_t SET[5];
+static char buf[255];
+
+int controlledWrite( int fd, uint8_t *packetBundle, size_t nPackets);
+static void alarm_handler(int signo);
 
 int main(int argc, char** argv)
 {
-    int fd,c, res;
+    int fd;
     struct termios oldtio,newtio;
-    char buf[255];
-    int i, sum = 0, speed = 0;
     // Trama
-    uint8_t SET[5];
+    SET[0] = F;
+    SET[1] = A;
+    SET[2] = C;
+    SET[3] = B;
+    SET[4] = F;
 
     if ( (argc < 2) ||
          ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -62,8 +76,8 @@ int main(int argc, char** argv)
     /* set input mode (non-canonical, no echo,...) */
     newtio.c_lflag = 0;
 
-    newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+    newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
+    newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
   /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
@@ -92,23 +106,60 @@ int main(int argc, char** argv)
     return 0;
 }
 
-int controlledWrite(int fd, uint8_t *packetBundle, int nPackets) {
+int controlledWrite(int fd, uint8_t *packetBundle, size_t nPackets) {
 
-    int i = 0, t = 0;
-    char Estado = 0;
+    ssize_t res;
+    size_t numberOfTries = 0, readPackets = 0, i = 0;
+    char Estado = 0, packetPartOfUA;
+    bool jump = false;
 
-    if ( (packetBundle == NULL) || ( nPackets == 0) ) return -1;
+    if ( (packetBundle == NULL) || ( nPackets == 0) ) {
+        errno = EINVAL;
+        return -1;
+    }
 
+    if (signal(SIGALRM, alarm_handler) == SIG_ERR)
+        return -1;
 
-    if ( ( Estado == 0 ) ) {
-        write(fd,SET,nPackets);
-        if ( t == 3 ) return -1;
-        Estado = 1;
-    } else if ( Estado == 1 ) {
+    while(1) {
+        if ( Estado == 0 ) {
+            write(fd,SET,nPackets);
+            alarm(TIMEOUT);
+            Estado = 1;
+        } else {
+            while(!alarmed) {
+                    res = read(fd,&packetPartOfUA,1);
+                    if ( readPackets == nPackets ) alarmed = true;
+                    else if ( res == 1 ) {
+                        buf[readPackets] = packetPartOfUA;
+                        ++readPackets;
+                    }
+            }
+            if ( readPackets == nPackets ) {
+                for ( i = 0; i < nPackets; ++i ) {
+                    if ( buf[i] != SET[i] ) {
+                        jump = true;
+                        break;
+                    }
+                }
+                if (!jump) return 0;
+            }
 
+            if ( numberOfTries >= 3 ) {
+                errno = ECONNABORTED;
+                return -1;
+            } else {
+                Estado = 0;
+                alarmed = false;
+                jump = false;
+                readPackets = 0;
+            }
+            ++numberOfTries;
+        }
+    }
+    return -1;
+}
 
-
-void alarm_handler() {
-    flag = 1;
-    tries++;
+static void alarm_handler(int signo) {
+    alarmed = true;
 }
