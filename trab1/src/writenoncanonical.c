@@ -118,8 +118,7 @@ int controlledWrite(int fd, uint8_t *packetBundle, size_t nPackets) {
         return -1;
     }
 
-    if (signal(SIGALRM, alarm_handler) == SIG_ERR)
-        return -1;
+    if (signal(SIGALRM, alarm_handler) == SIG_ERR) return -1;
 
     while(1) {
         if ( Estado == 0 ) {
@@ -128,13 +127,17 @@ int controlledWrite(int fd, uint8_t *packetBundle, size_t nPackets) {
             Estado = 1;
         } else {
             while(!alarmed) {
+                    if ( readPackets == nPackets ) {
+                        alarmed = true;
+                        alarm(0); // Caso todos os pacotes já tenham chegado desativamos o alarm
+                    }
                     res = read(fd,&packetPartOfUA,1);
-                    if ( readPackets == nPackets ) alarmed = true;
-                    else if ( res == 1 ) {
+                    if ( res == 1 ) {
                         buf[readPackets] = packetPartOfUA;
                         ++readPackets;
                     }
             }
+            // Podemos ter recebido o sinal sem termos recebido os pacotes todos
             if ( readPackets == nPackets ) {
                 for ( i = 0; i < nPackets; ++i ) {
                     if ( buf[i] != SET[i] ) {
