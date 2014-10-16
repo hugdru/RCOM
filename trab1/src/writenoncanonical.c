@@ -215,8 +215,12 @@ int parse_args(int argc, char **argv) {
             }
         }
 
-        optind = 1;
-        while ( (c = getopt(subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:x")) != -1 ) {
+        if ( i == 0 && (subArgc == argc) ) {
+            errno = EINVAL;
+            return -1;
+        }
+
+        while ( (c = getopt((int)subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:x")) != -1 ) {
 
             if ( c == 'b' || c == 't' || c == 'r') {
                 parsedNumber = parse_ulong(optarg,10);
@@ -289,6 +293,7 @@ int parse_args(int argc, char **argv) {
                     return -1;
             }
         }
+        optind = 1;
         if ( !ioSet ) Tunnels[i]->ALayer.status = STATUS_RECEIVER_STREAM;
     }
 
