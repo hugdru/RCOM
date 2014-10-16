@@ -395,6 +395,7 @@ int llopen(Tunnel *ptr) {
                         state = 0;
                     break;
                 case 5:
+                    write(ptr->ALayer.fileDescriptor,framesSU[UA_OFFSET],SIZE_OF_FRAMESU);
                     return 0; //Succeeded
             }
         }
