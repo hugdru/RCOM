@@ -14,6 +14,7 @@
 #include <string.h>
 #include <regex.h>
 #include <limits.h>
+#include <getopt.h>
 
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
@@ -26,14 +27,17 @@
 #define DEFAULT_BAUDRATE B38400
 #define DEFAULT_MODEMDEVICE "/dev/ttyS0"
 #define DEFAULT_TIMEOUT 3
-#define DEFAULT_NUMTRANSMISSIONS 3
+#define DEFAULT_NUMATTEMPTS 3
 
 #define CONTAINER_SIZE 256
 #define SIZE_OF_REPLY 5
 
-#define STATUS_RECEIVER 0
-#define STATUS_TRANSMITTER_FILE 1
-#define STATUS_TRANSMITTER_STRING 2
+#define STATUS_RECEIVER_FILE 0
+#define STATUS_RECEIVER_STREAM 1
+#define STATUS_TRANSMITTER_FILE 2
+#define STATUS_TRANSMITTER_STRING 3
+#define STATUS_TRANSMITTER_STREAM 4
+#define STATUS_UNSET -1
 
 typedef struct AppLayer {
     int fileDescriptor;
@@ -47,7 +51,7 @@ typedef struct LinkLayer {
     char const *port;
     char frame[CONTAINER_SIZE];
     unsigned int timeout;
-    unsigned int numTransmissions;
+    unsigned int numAttempts;
     struct termios oldtio;
 } LinkLayer;
 
@@ -61,8 +65,8 @@ typedef struct Tunnel {
     } io;
 } Tunnel;
 
-static void print_usage( char const * const * const argv);
-static int parse_args(const int argc, char const * const * const argv);
+static void print_usage(char **argv);
+static int parse_args(int argc, char **argv);
 int llopen(Tunnel *ptr);
 int llwrite(Tunnel *ptr, uint8_t *buffer, size_t length);
 int llread(Tunnel *ptr, uint8_t *buffer);
@@ -77,16 +81,27 @@ static uint8_t byteContainer[CONTAINER_SIZE];
 static Tunnel **Tunnels;
 static unsigned long NTunnels;
 
-int main(const int argc, char const * const * const argv)
+int main(int argc, char *argv[])
 {
+    int i = 0;
     uint8_t SET[5] = { F, A, C, B, F }; // Trama de Supervisão e Não Numeradas
 
     // PARSE STUFF FROM COMMAND LINE AND FILL THE STRUCTS
     // AND TEST THEIR VALIDITY, WITH BOUNDARY CHECKS AND REGEX
     if ( argc == 1 ) print_usage(argv);
-    else parse_args(argc, argv);
-
+    else i = parse_args(argc, argv);
+    if ( i == -1 ) print_usage(argv);
     /*llopen();*/
+
+    printf("NTunnels: %lu\n", NTunnels);
+    for(i = 0; i < (int)NTunnels; ++i) {
+        printf("Name: %s\n", Tunnels[i]->name);
+        printf("baudRate: %d\n", Tunnels[i]->LLayer.baudRate);
+        printf("port: %s\n", Tunnels[i]->LLayer.port);
+        printf("timeout: %d\n", Tunnels[i]->LLayer.timeout);
+        printf("numAttempts: %d\n", Tunnels[i]->LLayer.numAttempts);
+        printf("status: %d\n", Tunnels[i]->ALayer.status);
+    }
 
     /*llwrite(fd,SET,sizeof(SET));*/
 
@@ -95,7 +110,7 @@ int main(const int argc, char const * const * const argv)
     return 0;
 }
 
-void print_usage( char const * const * const argv) {
+void print_usage(char **argv) {
 
     char const *ptr;
     ptr = strrchr(argv[0],'/');
@@ -107,7 +122,7 @@ void print_usage( char const * const * const argv) {
 
     printf("\nNTUNNELS:");
     printf("\n -N number\tNumber of Tunnels to create, defaults to 1\n");
-    printf("\n :\tTunnel (OPTIONS MODE) seperator\n");
+    printf("\n +\t\tTunnel (OPTIONS MODE) seperator\n");
 
     printf("\nOptions:\n");
     printf(" -b  Number\tChange baudRate to a certain value, defaults to 38400\n");
@@ -118,44 +133,49 @@ void print_usage( char const * const * const argv) {
 
     printf("\nMODE");
     printf("\n Sender:\n");
-    printf("     - \tInformation to send is read from stdin be it a pipe or redirection\n");
+    printf("     -x \t\tInformation to send is read from stdin be it a pipe or redirection\n");
     printf("     < PathToFile\tSends a file must be used along with option -\n");
-    printf("     -m Message\tSends a message\n");
+    printf("     -m Message\t\tSends a message\n");
     printf("\n Receiver (default (no args))\n");
     printf("     > PathToFile\tReceive information and place it in a file\n");
-    printf("     -S  Path\tFile to send\n");
-    printf("     -R  Path\tWhere to place received file\n");
+    printf("     -S  Path\t\tFile to send\n");
+    printf("     -R  Path\t\tWhere to place received file\n");
 
     printf("\n--- Examples ---\n");
-    printf("%s -N 2 -d '/dev/ttyS1' -t 5 -r 4 -S \"~/pictures/cat.jpeg\" : -d '/dev/ttyS2' -R \"~/passwords.kbd\"\n", ptr);
-    printf("%s -d '/dev/ttyS1' - < 'dog.png'\n", ptr);
-    printf("%s - < nuclearlaunchCodes\n", ptr);
-    printf("cat file | %s -N 2 -d '/dev/ttyS1' -d '/dev/ttyS2' -\n", ptr);
+    printf("%s -N 2 -d '/dev/ttyS1' -t 5 -r 4 -S \"~/pictures/cat.jpeg\" + -d '/dev/ttyS2' -R \"~/passwords.kbd\"\n", ptr);
+    printf("%s -d '/dev/ttyS1' -x < 'dog.png'\n", ptr);
+    printf("%s -x < nuclearlaunchCodes\n", ptr);
+    printf("cat file | %s -N 2 -d '/dev/ttyS1' -d '/dev/ttyS2' -x\n", ptr);
 
+    exit(EXIT_FAILURE);
 }
 
-int parse_args(const int argc, char const * const * const argv) {
+int parse_args(int argc, char **argv) {
 
-    int c;
-    int subArgc;
-    char const * const * subArgv;
+    int c, retn;
+    unsigned int checkNDuplication = 0;
+    bool ioSet;
+    long int subArgc;
+    char **subArgv, **oldSubArgv;
     size_t numberOfSeparators = 0;
-    size_t i, t;
+    size_t i;
     unsigned long parsedNumber;
+    regex_t deviceRegex;
 
     NTunnels = 1;
 
     // Find number of Tunnels
     for ( i = 1; i < (size_t)argc; ++i) {
         if ( strncmp(argv[i],"-N",2) == 0 ) {
-            // See if the number of Tunnels is adjoined to -N ex: -N"$1" ; -N1337
-            if ( (strlen(argv[i]) > 2) && ((parsedNumber = parse_ulong(argv[i]+2,10)) == ULONG_MAX) ) return -1;
-            // Check to see if the next arg is the number of NTunnels
-            else if ( ((i+1) >= (size_t)argc) || ((parsedNumber = parse_ulong(argv[i+1],10)) == ULONG_MAX) ) return -1;
-            NTunnels = parsedNumber;
-            break;
-        }
-        else if ( strncmp(argv[i],":",1) == 0) {
+            if ( ( (strlen(argv[i]) > 2) && ((parsedNumber = parse_ulong(argv[i]+2,10)) != ULONG_MAX) ) ||
+                 ( ((i+1) < (size_t)argc) && ((parsedNumber = parse_ulong(argv[i+1],10)) != ULONG_MAX) ) ) {
+                NTunnels = parsedNumber;
+                break;
+            } else {
+                fprintf(stderr, "The -N option must be followed by a number space separated or adjoined");
+                return -1;
+            }
+        } else if ( strncmp(argv[i],"+",1) == 0) {
             ++numberOfSeparators;
         }
     }
@@ -171,65 +191,105 @@ int parse_args(const int argc, char const * const * const argv) {
         Tunnels[i]->LLayer.baudRate = DEFAULT_BAUDRATE;
         if ( NTunnels == 1 ) Tunnels[i]->LLayer.port = DEFAULT_MODEMDEVICE;
         Tunnels[i]->LLayer.timeout = DEFAULT_TIMEOUT;
-        Tunnels[i]->LLayer.numTransmissions = DEFAULT_NUMTRANSMISSIONS;
+        Tunnels[i]->LLayer.numAttempts = DEFAULT_NUMATTEMPTS;
+        Tunnels[i]->ALayer.status = STATUS_UNSET;
         Tunnels[i]->io.fptr = NULL;
     }
 
+    retn = regcomp(&deviceRegex,"/dev/ttyS[0-9][0-9]*",0);
+    if(retn) {
+        fprintf(stderr, "Could not compile regex\n");
+        return -1;
+    }
     // Parse stuff for each Tunnel
+    subArgv = argv;
+    subArgc = argc;
     for ( i = 0, subArgv = argv, subArgc = argc; i < NTunnels; ++i) {
+        ioSet = false;
         if ( NTunnels != 1 ) {
             subArgc = 0;
-            while( (subArgv < argv) && (strncmp(*subArgv,":",1) != 0) ) {
+            oldSubArgv = subArgv;
+            while( (subArgv < (argv + argc)) && ((strncmp(*subArgv,"+",1) != 0) || subArgc == 0) ) {
                 ++subArgv;
+                ++subArgc;
             }
         }
-        while ( (c = getopt(subArgc, subArgv, "N:b:d:t:r:n:S:R:-m:")) != -1 ) {
+
+        optind = 1;
+        while ( (c = getopt(subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:x")) != -1 ) {
+
+            if ( c == 'b' || c == 't' || c == 'r') {
+                parsedNumber = parse_ulong(optarg,10);
+                if ( parsedNumber == ULONG_MAX ) {
+                    fprintf(stderr, "-%c must be followed by a number\n", c);
+                    return -1;
+                }
+            } else if ( c == 'S' || c == 'R' || c == 'x' || c == 'm' ) {
+                if ( ioSet ) {
+                    fprintf(stderr, "There can only be a mode for each tunnel");
+                    return -1;
+                }
+                ioSet = true;
+            }
+
             switch (c) {
+                case 'N':
+                    if ( checkNDuplication > 1 ) {
+                        fprintf(stderr, "There can only be a -N option");
+                        errno = EINVAL;
+                        return -1;
+                    }
+                    ++checkNDuplication;
+                    break;
                 case 'b':
-                    Tunnels[i]->LLayer.baudRate =;
+                    Tunnels[i]->LLayer.baudRate = (tcflag_t)parsedNumber;
                     break;
                 case 'd':
-                    Tunnels[i]->LLayer.port =;
+                    /* Regex testing */
+                    retn = regexec(&deviceRegex, optarg, 0, NULL, 0);
+                    if ( retn == REG_NOMATCH || retn != 0 ) {
+                        fprintf(stderr, "Not a proper device file, expected /dev/ttyS[0-9]+");
+                        errno = EINVAL;
+                        return -1;
+                    }
+                    Tunnels[i]->LLayer.port = optarg;
                     break;
                 case 't':
-                    Tunnels[i]->LLayer.timeout =;
+                    Tunnels[i]->LLayer.timeout = (unsigned int)parsedNumber;
                     break;
                 case 'r':
-                    Tunnels[i]->LLayer.numTransmissions =;
+                    Tunnels[i]->LLayer.numAttempts = (unsigned int)parsedNumber;
                     break;
                 case 'n':
-                    Tunnels[i]->name=;
+                    Tunnels[i]->name = optarg;
+                    break;
                 case 'S':
-                    Tunnels[i]->io.fptr=;
-                    Tunnels[i]->ALayer.status=;
+                    if ( (Tunnels[i]->io.fptr = fopen(optarg,"rb")) == NULL ) {
+                        fprintf(stderr, "Error opening the file for reading\n");
+                        return -1;
+                    }
+                    Tunnels[i]->ALayer.status = STATUS_TRANSMITTER_FILE;
                     break;
                 case 'R':
-                    Tunnels[i]->io.fptr=;
-                    Tunnels[i]->ALayer.status=;
-                    break;
-                case '-':
-                    Tunnels[i]->io.fptr=;
-                    Tunnels[i]->ALayer.status=;
+                    if ( (Tunnels[i]->io.fptr = fopen(optarg,"w+b")) == NULL ) {
+                        fprintf(stderr, "Error opening the file for writing\n");
+                        return -1;
+                    }
+                    Tunnels[i]->ALayer.status = STATUS_RECEIVER_FILE;
                     break;
                 case 'm':
-                    Tunnels[i]->io.chptr=;
-                    Tunnels[i]->ALayer.status=;
+                    Tunnels[i]->io.chptr = optarg;
+                    Tunnels[i]->ALayer.status = STATUS_TRANSMITTER_STRING;
                     break;
-                case '?':
-                    if (optopt == 'c')
-                    fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-                    else if (isprint (optopt))
-                    fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-                    else
-                    fprintf (stderr,
-                            "Unknown option character `\\x%x'.\n",
-                            optopt);
-                    return 1;
+                case 'x':
+                    Tunnels[i]->ALayer.status = STATUS_TRANSMITTER_STREAM;
+                    break;
                 default:
                     errno = EINVAL;
                     return -1;
             }
         }
+        if ( !ioSet ) Tunnels[i]->ALayer.status = STATUS_RECEIVER_STREAM;
     }
 
     return 0;
@@ -330,7 +390,7 @@ int llwrite(Tunnel *ptr, uint8_t *buffer, size_t length) {
                 /*if (!jump) return 0;*/
             /*}*/
 
-            if ( numberOfTries >= ptr->LLayer.numTransmissions ) {
+            if ( numberOfTries >= ptr->LLayer.numAttempts ) {
                 errno = ECONNABORTED;
                 return -1;
             } else {
@@ -387,3 +447,4 @@ static unsigned long parse_ulong(char const * const str, int base) {
 
     return val;
 }
+
