@@ -25,7 +25,7 @@
 #define B ((A)^(C))
 
 // All Tunnels get these values in case user does not overwrite them
-#define DEFAULT_BAUDRATE B38400
+#define DEFAULT_BAUDRATE 38400
 #define DEFAULT_MODEMDEVICE "/dev/ttyS0"
 #define DEFAULT_TIMEOUT 3
 #define DEFAULT_NUMATTEMPTS 3
@@ -94,19 +94,18 @@ int main(int argc, char *argv[])
 {
     int i = 0;
 
-    if ( argc == 1 ) print_usage(argv);
-    else i = parse_args(argc, argv);
+    i = parse_args(argc, argv);
     if ( i == -1 ) print_usage(argv);
 
-    /*printf("NTunnels: %lu\n", NTunnels);*/
-    /*for(i = 0; i < (int)NTunnels; ++i) {*/
-        /*printf("Name: %s\n", Tunnels[i]->name);*/
-        /*printf("baudRate: %d\n", Tunnels[i]->LLayer.baudRate);*/
-        /*printf("port: %s\n", Tunnels[i]->LLayer.port);*/
-        /*printf("timeout: %d\n", Tunnels[i]->LLayer.timeout);*/
-        /*printf("numAttempts: %d\n", Tunnels[i]->LLayer.numAttempts);*/
-        /*printf("status: %d\n", Tunnels[i]->ALayer.status);*/
-    /*}*/
+    printf("NTunnels: %lu\n", NTunnels);
+    for(i = 0; i < (int)NTunnels; ++i) {
+        printf("Name: %s\n", Tunnels[i]->name);
+        printf("baudRate: %d\n", Tunnels[i]->LLayer.baudRate);
+        printf("port: %s\n", Tunnels[i]->LLayer.port);
+        printf("timeout: %d\n", Tunnels[i]->LLayer.timeout);
+        printf("numAttempts: %d\n", Tunnels[i]->LLayer.numAttempts);
+        printf("status: %d\n", Tunnels[i]->ALayer.status);
+    }
 
     llopen(Tunnels[0]);
 
@@ -211,7 +210,8 @@ int parse_args(int argc, char **argv) {
     // Parse stuff for each Tunnel
     subArgv = argv;
     subArgc = argc;
-    for ( i = 0, subArgv = argv, subArgc = argc; i < NTunnels; ++i) {
+    oldSubArgv = argv;
+    for ( i = 0; i < NTunnels; ++i) {
         ioSet = false;
         if ( NTunnels != 1 ) {
             subArgc = 0;
@@ -222,7 +222,7 @@ int parse_args(int argc, char **argv) {
             }
         }
 
-        if ( i == 0 && (subArgc == argc) ) {
+        if ( (i == 0) && (subArgc == argc) && (NTunnels != 1) ) {
             errno = EINVAL;
             return -1;
         }
@@ -298,6 +298,7 @@ int parse_args(int argc, char **argv) {
                 default:
                     errno = EINVAL;
                     return -1;
+                    break;
             }
         }
         optind = 1;
@@ -325,9 +326,11 @@ int llopen(Tunnel *ptr) {
         exit(-1);
     }
 
+    errno = 0;
     if ( tcgetattr(ptr->ALayer.fileDescriptor,&(ptr->LLayer.oldtio)) == -1 ) { /* save current port settings */
-      perror("tcgetattr");
-      exit(-1);
+        printf("errno = %d\n", errno);
+        perror("tcgetattr");
+        exit(-1);
     }
 
     bzero(&newtio, sizeof(newtio));
