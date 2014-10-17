@@ -33,11 +33,13 @@
 #define CONTAINER_SIZE 256
 #define SIZE_OF_FRAMESU 5
 
-#define STATUS_RECEIVER_FILE 0
-#define STATUS_RECEIVER_STREAM 1
-#define STATUS_TRANSMITTER_FILE 2
-#define STATUS_TRANSMITTER_STRING 3
-#define STATUS_TRANSMITTER_STREAM 4
+#define IS_RECEIVER(n) (!((n)>>4))
+#define IS_TRANSMITTER(n) ((n)>>4)
+#define STATUS_RECEIVER_FILE 0x00
+#define STATUS_RECEIVER_STREAM 0x01
+#define STATUS_TRANSMITTER_FILE 0x12
+#define STATUS_TRANSMITTER_STRING 0x13
+#define STATUS_TRANSMITTER_STREAM 0x14
 #define STATUS_UNSET -1
 
 typedef struct AppLayer {
@@ -108,7 +110,7 @@ int main(int argc, char *argv[])
 
     llopen(Tunnels[0]);
 
-    llwrite(Tunnels[0]);
+    /*llwrite(Tunnels[0]);*/
 
     llclose(Tunnels[0]);
 
@@ -307,6 +309,7 @@ int parse_args(int argc, char **argv) {
 
 int llopen(Tunnel *ptr) {
 
+    bool first;
     unsigned int tries = 0;
     struct termios newtio;
     uint8_t partOfFrame, state;
@@ -352,11 +355,15 @@ int llopen(Tunnel *ptr) {
     // New termios Structure set
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
-    while(tries < ptr->LLayer.timeout) {
-        write(ptr->ALayer.fileDescriptor, framesSU[SET_OFFSET], 5);
+    while(tries < ptr->LLayer.numAttempts) {
+
+        if ( IS_TRANSMITTER(ptr->ALayer.status) ) {
+            write(ptr->ALayer.fileDescriptor, framesSU[SET_OFFSET], 5);
+        }
 
         alarmed = false;
         alarm(3);
+        first = true;
 
         while(!alarmed) {
             read(ptr->ALayer.fileDescriptor, &partOfFrame, 1);
@@ -364,6 +371,11 @@ int llopen(Tunnel *ptr) {
             switch (state) {
                 case 0:
                     if (partOfFrame == F)
+                        if ( IS_RECEIVER(ptr->ALayer.status) && first ) {
+                            alarm(3);
+                            alarmed = false;
+                            first = false;
+                        }
                         state = 1;
                     break;
                 case 1:
@@ -395,12 +407,17 @@ int llopen(Tunnel *ptr) {
                         state = 0;
                     break;
                 case 5:
-                    write(ptr->ALayer.fileDescriptor,framesSU[UA_OFFSET],SIZE_OF_FRAMESU);
+                    if ( IS_RECEIVER(ptr->ALayer.status) ) {
+                        write(ptr->ALayer.fileDescriptor,framesSU[UA_OFFSET],SIZE_OF_FRAMESU);
+                    }
                     return 0; //Succeeded
+                default:
+                    return -1;
             }
         }
         tries++;
     }
+    errno = ECONNABORTED;
     return -1;
 }
 

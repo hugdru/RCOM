@@ -4,7 +4,7 @@ SRC = $(wildcard src/*.c)
 
 OBJ = $(patsubst src%, ../buildtemp%.o, $(SRC))
 
-OUT = bin/programa
+OUT = bin/serius
 
 # include directories
 INCLUDES = -I. -I./include/ -I./src -I/usr/include
