@@ -76,12 +76,13 @@ int llclose(Tunnel *ptr);
 
 static void alarm_handler(int signo);
 static unsigned long parse_ulong(char const * const str, int base); // From the function manual
+static void wipeTunnels(void);
 
 typedef enum { false, true } bool;
 static bool alarmed = false;
-static uint8_t byteContainer[CONTAINER_SIZE];
-static Tunnel **Tunnels;
-static unsigned long NTunnels;
+/*static uint8_t byteContainer[CONTAINER_SIZE];*/
+static Tunnel **Tunnels = NULL;
+static size_t NTunnels = 0;
 
 // Multidimensional array for supervision and Not numbered frames
 #define SET_OFFSET 0
@@ -95,7 +96,10 @@ int main(int argc, char *argv[])
     int i = 0;
 
     i = parse_args(argc, argv);
-    if ( i == -1 ) print_usage(argv);
+    if ( i == -1 ) {
+        print_usage(argv);
+        goto cleanup;
+    }
 
     printf("NTunnels: %lu\n", NTunnels);
     for(i = 0; i < (int)NTunnels; ++i) {
@@ -107,13 +111,19 @@ int main(int argc, char *argv[])
         printf("status: %d\n", Tunnels[i]->ALayer.status);
     }
 
-    llopen(Tunnels[0]);
+    if ( llopen(Tunnels[0]) == -1 ) goto cleanup;
 
     /*llwrite(Tunnels[0]);*/
 
-    llclose(Tunnels[0]);
+    if ( llclose(Tunnels[0]) == -1 ) goto cleanup;
 
+    wipeTunnels();
     return 0;
+
+cleanup:
+    wipeTunnels();
+    fprintf(stderr, "There was an error, report it to devs\n");
+    return -1;
 }
 
 void print_usage(char **argv) {
@@ -152,8 +162,6 @@ void print_usage(char **argv) {
     printf("%s -d '/dev/ttyS1' -x < 'dog.png'\n", ptr);
     printf("%s -x < nuclearlaunchCodes\n", ptr);
     printf("cat file | %s -N 2 -d '/dev/ttyS1' -d '/dev/ttyS2' -x\n", ptr);
-
-    exit(EXIT_FAILURE);
 }
 
 int parse_args(int argc, char **argv) {
@@ -323,14 +331,12 @@ int llopen(Tunnel *ptr) {
     ptr->ALayer.fileDescriptor = open(ptr->LLayer.port, O_RDWR | O_NOCTTY);
     if ( ptr->ALayer.fileDescriptor < 0 ) {
         perror(ptr->LLayer.port);
-        exit(-1);
+        return -1;
     }
 
-    errno = 0;
     if ( tcgetattr(ptr->ALayer.fileDescriptor,&(ptr->LLayer.oldtio)) == -1 ) { /* save current port settings */
-        printf("errno = %d\n", errno);
         perror("tcgetattr");
-        exit(-1);
+        return -1;
     }
 
     bzero(&newtio, sizeof(newtio));
@@ -353,20 +359,18 @@ int llopen(Tunnel *ptr) {
 
     if ( tcsetattr(ptr->ALayer.fileDescriptor,TCSANOW,&newtio) == -1) {
       perror("Failed to set new settings for port, tcsetattr");
-      exit(-1);
+      return -1;
     }
     // New termios Structure set
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
+    alarmed = false;
     while(tries < ptr->LLayer.numAttempts) {
 
         if ( IS_TRANSMITTER(ptr->ALayer.status) ) {
             write(ptr->ALayer.fileDescriptor, framesSU[SET_OFFSET], 5);
-        }
-
-        alarmed = false;
-        alarm(3);
-        first = true;
+            alarm(3);
+        } else first = true;
 
         while(!alarmed) {
             read(ptr->ALayer.fileDescriptor, &partOfFrame, 1);
@@ -376,7 +380,6 @@ int llopen(Tunnel *ptr) {
                     if (partOfFrame == F)
                         if ( IS_RECEIVER(ptr->ALayer.status) && first ) {
                             alarm(3);
-                            alarmed = false;
                             first = false;
                         }
                         state = 1;
@@ -418,6 +421,7 @@ int llopen(Tunnel *ptr) {
                     return -1;
             }
         }
+        alarmed = false;
         tries++;
     }
     errno = ECONNABORTED;
@@ -497,14 +501,14 @@ int llclose(Tunnel *ptr) {
 
     if ( tcsetattr(ptr->ALayer.fileDescriptor,TCSANOW,&(ptr->LLayer.oldtio)) == -1 ) {
       perror("tcsetattr");
-      exit(-1);
+      return -1;
     }
 
     close(ptr->ALayer.fileDescriptor);
     return 0;
 }
 
-void alarm_handler(int signo) {
+static void alarm_handler(int signo) {
     alarmed = true;
 }
 
@@ -527,5 +531,14 @@ static unsigned long parse_ulong(char const * const str, int base) {
     }
 
     return val;
+}
+
+static void wipeTunnels(void) {
+    size_t i;
+
+    if ( Tunnels == NULL || NTunnels == 0 ) return;
+    for( i = 0; i < NTunnels; ++i) {
+        free(Tunnels[i]);
+    }
 }
 
