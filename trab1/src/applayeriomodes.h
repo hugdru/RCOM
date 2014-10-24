@@ -5,6 +5,3 @@
 #define STATUS_TRANSMITTER_STREAM 0x14
 #define STATUS_UNSET -1
 
-#define IS_RECEIVER(n) (!((n)>>4))
-#define IS_TRANSMITTER(n) ((n)>>4)
-

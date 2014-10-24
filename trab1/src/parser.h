@@ -6,6 +6,7 @@ typedef struct parsedLinkLayerSettings {
     char const *port;
     unsigned int timeout;
     unsigned int numAttempts;
+    unsigned int IframeSize;
     tcflag_t baudRate;
 } parsedLinkLayerSettings;
 

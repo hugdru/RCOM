@@ -33,6 +33,7 @@ void print_usage(char **argv) {
     printf(" -t  Number\tSeconds to timeout, defaults to 3 seconds\n");
     printf(" -r  Number\tNumber of retries before aborting connection, defaults to 3\n");
     printf(" -n  String\tName you wish to assign to this connection\n");
+    printf(" -f  Number\tTamanho máximo do campo de informação das tramas I (sem stuffing)\n");
 
     printf("\nMODE");
     printf("\n Sender:\n");
@@ -84,7 +85,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
     // If user forgot -N option use the numberOfSeparators instead
     if ( (*NBundles == 1) && (numberOfSeparators != 0) ) *NBundles = numberOfSeparators + 1;
 
-    // Create the array of pointers, each one pointing to a Tunnel structure
+    // Create the array of pointers, each one pointing to a Bundle structure
     Bundles = (Bundle **) malloc(sizeof(Bundle *) * (*NBundles));
     for( i = 0; i < *NBundles; ++i) {
         Bundles[i] = (Bundle *) malloc(sizeof(Bundle));
@@ -93,6 +94,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
         if ( *NBundles == 1 ) Bundles[i]->pLlSettings.port = DEFAULT_MODEMDEVICE;
         Bundles[i]->pLlSettings.timeout = DEFAULT_TIMEOUT;
         Bundles[i]->pLlSettings.numAttempts = DEFAULT_NUMATTEMPTS;
+        Bundles[i]->pLlSettings.IframeSize = DEFAULT_IFRAME_SIZE;
         Bundles[i]->pAlSettings.status = STATUS_UNSET;
         Bundles[i]->pAlSettings.io.fptr= NULL;
     }
@@ -122,9 +124,9 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
             return -1;
         }
 
-        while ( (c = getopt((int)subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:x")) != -1 ) {
+        while ( (c = getopt((int)subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:f:x")) != -1 ) {
 
-            if ( c == 'b' || c == 't' || c == 'r') {
+            if ( c == 'b' || c == 't' || c == 'r' || c == 'f' ) {
                 parsedNumber = parse_ulong(optarg,10);
                 if ( parsedNumber == ULONG_MAX ) {
                     fprintf(stderr, "-%c must be followed by a number\n", c);
@@ -189,6 +191,9 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                     break;
                 case 'x':
                     Bundles[i]->pAlSettings.status = STATUS_TRANSMITTER_STREAM;
+                    break;
+                case 'f':
+                    Bundles[i]->pLlSettings.IframeSize = (unsigned int)parsedNumber;
                     break;
                 default:
                     errno = EINVAL;

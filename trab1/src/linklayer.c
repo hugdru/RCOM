@@ -1,3 +1,4 @@
+#include "linklayergeneral.h"
 #include "linklayer.h"
 #include "useful.h"
 
@@ -10,28 +11,48 @@
 #include <strings.h>
 #include <stdio.h>
 
-// Useful defines for SET & UA
 #define F 0x7e
-#define A 0x03
-#define C 0x03
-#define B ((A)^(C))
+#define A_CSENDER_RRECEIVER 0x03
+#define A_CRECEIVER_RSENDER 0x01
+#define C_SET 0x03
+#define C_UA 0x07
+#define C_DISC 0x11
+#define C_RR_RAW 0x05
+#define C_REJ_RAW 0x01
+#define B ((A)^(C)) // Modificar isto vai diferir campo de erros!
 
-#define CONTAINER_SIZE 256
 #define SIZE_OF_FRAMESU 5
 
-#define SET_OFFSET 0
-#define UA_OFFSET 0
-#define RR_OFFSET 1
-#define DISC_OFFSET 2
+#define CRC_8 0x9b
 
-bool alarmed = false;
+typedef struct LinkLayer {
+    bool is_receiver;
+    unsigned int sequenceNumber;
+    size_t nPayloadsAndFootersToProcess;
+    char **payloadsAndFooter;
+    char *payloadsAndFooterLeftOver;
+    size_t leftOversSize;
+    int serialFileDescriptor;
+    struct termios oldtio;
+    parsedLinkLayerSettings *settings;
+} LinkLayer;
+
+#define SET_OFFSET 0
+#define UA_OFFSET 1
+#define DISC_OFFSET 2
+uint8_t framesSU[][SIZE_OF_FRAMESU] = {{F,A,C,B,F}, {0}, {0}}; // Isto também vai depender se for receiver ou transmitter por causa dos bytes C e A!!
+
 void alarm_handler(int signo);
 
-uint8_t framesSU[][SIZE_OF_FRAMESU] = {{F,A,C,A^C,F}, {0}, {0}};
+int buildFrameHeader(uint8_t A, uint8_t C, uint8_t *frame, uint16_t *frameSize);
+
+// uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess vai ser preciso aceder a isto
+int buildFrameBody(uint8_t *packet, size_t packetSize);
 
 LinkLayer LLayer;
 
-static bool blocked = false;
+bool blocked = false;
+bool alarmed = false;
 
 int llinitialize(parsedLinkLayerSettings *ptr, bool is_receiver) {
 
@@ -47,6 +68,8 @@ int llinitialize(parsedLinkLayerSettings *ptr, bool is_receiver) {
 
     LLayer.settings = ptr;
     LLayer.is_receiver = is_receiver;
+    LLayer.payloadsAndFooter = NULL;
+    LLayer.payloadsAndFooterLeftOver = NULL;
 
     blocked = true;
     return 0;
@@ -242,6 +265,19 @@ int llread(uint8_t *packet) {
 
 int llclose(void) {
 
+    if ( !blocked ) {
+        fprintf(stderr, "You have to llinitialize and llopen first\n");
+        return -1;
+    }
+
+    // SEND LeftOverFrame if there is one
+
+
+
+    // END Connection in a proper way
+
+
+
     sleep(3);
 
     if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio)) == -1 ) {
@@ -250,10 +286,50 @@ int llclose(void) {
     }
 
     close(LLayer.serialFileDescriptor);
+    blocked = false;
     return 0;
 }
 
 void alarm_handler(int signo) {
     alarmed = true;
+}
+
+int buildFrameHeader(uint8_t A, uint8_t C, uint8_t *frame, uint16_t *frameSize) {
+}
+
+int buildFrameBody(uint8_t *packet, size_t packetSize) {
+
+}
+
+
+uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
+
+    uint8_t R = 0;
+    uint8_t bitsRead = 0;
+
+    if ( data == NULL || size == 0 ) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    // Calculate the remainder
+    while( size > 0 ) {
+        R <<= 1;
+        R |= (*data >> bitsRead) & 0x1;
+        bitsRead++;
+        if ( bitsRead > 7 ) {
+            bitsRead = 0;
+            size--;
+            data++;
+        }
+        if ( R & 0x80 ) R ^= CRC_8;
+    }
+
+    for(size_t i = 0; i < 8; ++i) {
+        R <<=1;
+        if( R & 0x80 ) R ^= CRC_8;
+    }
+
+    return R;
 }
 
