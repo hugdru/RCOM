@@ -43,7 +43,7 @@ LinkLayer LLayer;
 
 // Tem de ser global por causa do llclose()
 size_t leftOversSize = 0;
-char *payloadsAndFooterLeftOver = NULL;
+uint8_t *payloadsAndFooterLeftOver = NULL;
 
 bool blocked = false;
 bool alarmed = false;
@@ -54,6 +54,8 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
         fprintf(stderr, "You can only initialize once\n");
         return -1;
     }
+
+    payloadsAndFooterLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize );
 
     if ( ptr == NULL ) {
         errno = EINVAL;
@@ -74,6 +76,8 @@ int llopen(void) {
     unsigned int tries = 0;
     struct termios newtio;
     uint8_t partOfFrame, state;
+    uint8_t *frameToSend;
+    uint16_t frameSize;
 
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize first\n");
@@ -93,6 +97,7 @@ int llopen(void) {
 
     if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { /* save current port settings */
         perror("tcgetattr");
+        close(LLayer.serialFileDescriptor);
         return -1;
     }
 
@@ -115,8 +120,9 @@ int llopen(void) {
     tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);
 
     if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {
-      perror("Failed to set new settings for port, tcsetattr");
-      return -1;
+        perror("Failed to set new settings for port, tcsetattr");
+        close(LLayer.serialFileDescriptor);
+        return -1;
     }
     // New termios Structure set
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
@@ -125,7 +131,11 @@ int llopen(void) {
     while(tries < LLayer.settings->numAttempts) {
 
         if ( !LLayer.is_receiver ) {
-            write(LLayer.serialFileDescriptor, framesSU[SET_OFFSET], 5);
+            frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize);
+            frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);
+            if ( frameToSend == NULL ) goto cleanUp;
+            frameToSend[frameSize-1] = F;
+            write(LLayer.serialFileDescriptor, frameToSend, 5);
             alarm(3);
         } else first = true;
 
@@ -171,9 +181,14 @@ int llopen(void) {
                     break;
                 case 5:
                     if ( LLayer.is_receiver ) {
-                        write(LLayer.serialFileDescriptor,framesSU[UA_OFFSET],SIZE_OF_FRAMESU);
+                        frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize);
+                        frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);
+                        if ( frameToSend == NULL ) goto cleanUp;
+                        frameToSend[frameSize-1] = F;
+                        write(LLayer.serialFileDescriptor,frameToSend,SIZE_OF_FRAMESU);
                     }
-                    return 0; //Succeeded
+                    free(frameToSend);
+                    return 0;
                 default:
                     return -1;
             }
@@ -182,13 +197,17 @@ int llopen(void) {
         tries++;
     }
     errno = ECONNABORTED;
+cleanUp:
+    free(frameToSend);
+    tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));
+    close(LLayer.serialFileDescriptor);
     return -1;
 }
 
 int lwrite(uint8_t *packet, size_t packetSize) {
 
-    static size_t nPayloadsAndFootersToProcess = 0;
-    static uint8_t **payloadsAndFooter = NULL;
+    size_t nPayloadsAndFootersToProcess = 0;
+    uint8_t **payloadsAndFooter = NULL;
 
     buildRawFramesBodies(packet,packetSize,payloadsAndFooter,&nPayloadsAndFootersToProcess);
     return 0;
@@ -277,6 +296,9 @@ int llclose(void) {
 
     sleep(3);
 
+    free(payloadsAndFooterLeftOver);
+    leftOversSize = 0;
+
     if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio)) == -1 ) {
       perror("tcsetattr");
       return -1;
@@ -331,8 +353,8 @@ int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsA
 
     if ( leftOversSize != 0 ) {
         if ( packetSize >= (LLayer.settings->IframeSize - leftOversSize) ) {
-            payloadsAndFooter = (uint8_t **) realloc(payloadsAndFooter, *nPayloadsAndFootersToProcess + 2);
-            payloadsAndFooter[*nPayloadsAndFootersToProcess] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize + 1 );
+            payloadsAndFooter = (uint8_t **) realloc(payloadsAndFooter, *nPayloadsAndFootersToProcess);
+            payloadsAndFooter[*nPayloadsAndFootersToProcess] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize + 2 );
             fillUntil = LLayer.settings->IframeSize;
             for ( i = 0; i < leftOversSize; ++i) {
                 payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = payloadsAndFooterLeftOver[i];
