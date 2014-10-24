@@ -1,6 +1,4 @@
-#include "linklayergeneral.h"
 #include "linklayer.h"
-#include "useful.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -10,6 +8,7 @@
 #include <signal.h>
 #include <strings.h>
 #include <stdio.h>
+#include <termios.h>
 
 #define F 0x7e
 #define A_CSENDER_RRECEIVER 0x03
@@ -19,42 +18,32 @@
 #define C_DISC 0x11
 #define C_RR_RAW 0x05
 #define C_REJ_RAW 0x01
-#define B ((A)^(C)) // Modificar isto vai diferir campo de erros!
 
 #define SIZE_OF_FRAMESU 5
-
 #define CRC_8 0x9b
 
 typedef struct LinkLayer {
     bool is_receiver;
     unsigned int sequenceNumber;
-    size_t nPayloadsAndFootersToProcess;
-    char **payloadsAndFooter;
-    char *payloadsAndFooterLeftOver;
-    size_t leftOversSize;
     int serialFileDescriptor;
     struct termios oldtio;
-    parsedLinkLayerSettings *settings;
+    LinkLayerSettings *settings;
 } LinkLayer;
 
-#define SET_OFFSET 0
-#define UA_OFFSET 1
-#define DISC_OFFSET 2
-uint8_t framesSU[][SIZE_OF_FRAMESU] = {{F,A,C,B,F}, {0}, {0}}; // Isto também vai depender se for receiver ou transmitter por causa dos bytes C e A!!
-
 void alarm_handler(int signo);
-
 int buildFrameHeader(uint8_t A, uint8_t C, uint8_t *frame, uint16_t *frameSize);
-
-// uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess vai ser preciso aceder a isto
-int buildFrameBody(uint8_t *packet, size_t packetSize);
+int buildFrameBody(uint8_t *packet, size_t packetSize); // uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess vai ser preciso aceder a isto
 
 LinkLayer LLayer;
+
+// Tem de ser global por causa do llclose()
+size_t leftOversSize;
+char *payloadsAndFooterLeftOver = NULL;
 
 bool blocked = false;
 bool alarmed = false;
 
-int llinitialize(parsedLinkLayerSettings *ptr, bool is_receiver) {
+int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 
     if ( blocked ) {
         fprintf(stderr, "You can only initialize once\n");
@@ -68,8 +57,7 @@ int llinitialize(parsedLinkLayerSettings *ptr, bool is_receiver) {
 
     LLayer.settings = ptr;
     LLayer.is_receiver = is_receiver;
-    LLayer.payloadsAndFooter = NULL;
-    LLayer.payloadsAndFooterLeftOver = NULL;
+    payloadsAndFooterLeftOver = NULL;
 
     blocked = true;
     return 0;
@@ -193,6 +181,9 @@ int llopen(void) {
 }
 
 int lwrite(uint8_t *packet, size_t packetSize) {
+
+    static size_t nPayloadsAndFootersToProcess;
+    static char **payloadsAndFooter = NULL;
 
     return 0;
 }

@@ -18,11 +18,11 @@ int main(int argc, char *argv[])
     printf("NBundles: %lu\n", NBundles);
     for(i = 0; i < (int)NBundles; ++i) {
         printf("Name: %s\n", Bundles[i]->name);
-        printf("baudRate: %d\n", Bundles[i]->pLlSettings.baudRate);
-        printf("port: %s\n", Bundles[i]->pLlSettings.port);
-        printf("timeout: %d\n", Bundles[i]->pLlSettings.timeout);
-        printf("numAttempts: %d\n", Bundles[i]->pLlSettings.numAttempts);
-        printf("status: %d\n", Bundles[i]->pAlSettings.status);
+        printf("baudRate: %d\n", Bundles[i]->llSettings.baudRate);
+        printf("port: %s\n", Bundles[i]->llSettings.port);
+        printf("timeout: %d\n", Bundles[i]->llSettings.timeout);
+        printf("numAttempts: %d\n", Bundles[i]->llSettings.numAttempts);
+        printf("status: %d\n", Bundles[i]->alSettings.status);
     }
 
     // Em vez de usar as funções do link layer é para usar as funções do aplication layer

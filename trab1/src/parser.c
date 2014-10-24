@@ -1,7 +1,5 @@
 #include "parser.h"
 #include "useful.h"
-#include "applayeriomodes.h"
-#include "linklayergeneral.h"
 
 #include <ctype.h>
 #include <regex.h>
@@ -10,6 +8,12 @@
 #include <getopt.h>
 #include <limits.h>
 #include <stdlib.h>
+
+#define DEFAULT_BAUDRATE 38400
+#define DEFAULT_MODEMDEVICE "/dev/ttyS0"
+#define DEFAULT_TIMEOUT 3
+#define DEFAULT_NUMATTEMPTS 3
+#define DEFAULT_IFRAME_SIZE 100
 
 unsigned long parse_ulong(char const * const str, int base); // From the function manual
 
