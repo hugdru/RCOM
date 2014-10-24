@@ -94,13 +94,13 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
     for( i = 0; i < *NBundles; ++i) {
         Bundles[i] = (Bundle *) malloc(sizeof(Bundle));
         // Set defaults to all Bundles
-        Bundles[i]->pLlSettings.baudRate = DEFAULT_BAUDRATE;
-        if ( *NBundles == 1 ) Bundles[i]->pLlSettings.port = DEFAULT_MODEMDEVICE;
-        Bundles[i]->pLlSettings.timeout = DEFAULT_TIMEOUT;
-        Bundles[i]->pLlSettings.numAttempts = DEFAULT_NUMATTEMPTS;
-        Bundles[i]->pLlSettings.IframeSize = DEFAULT_IFRAME_SIZE;
-        Bundles[i]->pAlSettings.status = STATUS_UNSET;
-        Bundles[i]->pAlSettings.io.fptr= NULL;
+        Bundles[i]->llSettings.baudRate = DEFAULT_BAUDRATE;
+        if ( *NBundles == 1 ) Bundles[i]->llSettings.port = DEFAULT_MODEMDEVICE;
+        Bundles[i]->llSettings.timeout = DEFAULT_TIMEOUT;
+        Bundles[i]->llSettings.numAttempts = DEFAULT_NUMATTEMPTS;
+        Bundles[i]->llSettings.IframeSize = DEFAULT_IFRAME_SIZE;
+        Bundles[i]->alSettings.status = STATUS_UNSET;
+        Bundles[i]->alSettings.io.fptr= NULL;
     }
 
     retn = regcomp(&deviceRegex,"/dev/ttyS[0-9][0-9]*",0);
@@ -154,7 +154,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                     ++checkNDuplication;
                     break;
                 case 'b':
-                    Bundles[i]->pLlSettings.baudRate = (tcflag_t)parsedNumber;
+                    Bundles[i]->llSettings.baudRate = (tcflag_t)parsedNumber;
                     break;
                 case 'd':
                     /* Regex testing */
@@ -164,40 +164,40 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                         errno = EINVAL;
                         return -1;
                     }
-                    Bundles[i]->pLlSettings.port = optarg;
+                    Bundles[i]->llSettings.port = optarg;
                     break;
                 case 't':
-                    Bundles[i]->pLlSettings.timeout = (unsigned int)parsedNumber;
+                    Bundles[i]->llSettings.timeout = (unsigned int)parsedNumber;
                     break;
                 case 'r':
-                    Bundles[i]->pLlSettings.numAttempts = (unsigned int)parsedNumber;
+                    Bundles[i]->llSettings.numAttempts = (unsigned int)parsedNumber;
                     break;
                 case 'n':
                     Bundles[i]->name = optarg;
                     break;
                 case 'S':
-                    if ( (Bundles[i]->pAlSettings.io.fptr = fopen(optarg,"rb")) == NULL ) {
+                    if ( (Bundles[i]->alSettings.io.fptr = fopen(optarg,"rb")) == NULL ) {
                         fprintf(stderr, "Error opening the file for reading\n");
                         return -1;
                     }
-                    Bundles[i]->pAlSettings.status = STATUS_TRANSMITTER_FILE;
+                    Bundles[i]->alSettings.status = STATUS_TRANSMITTER_FILE;
                     break;
                 case 'R':
-                    if ( (Bundles[i]->pAlSettings.io.fptr = fopen(optarg,"w+b")) == NULL ) {
+                    if ( (Bundles[i]->alSettings.io.fptr = fopen(optarg,"w+b")) == NULL ) {
                         fprintf(stderr, "Error opening the file for writing\n");
                         return -1;
                     }
-                    Bundles[i]->pAlSettings.status = STATUS_RECEIVER_FILE;
+                    Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE;
                     break;
                 case 'm':
-                    Bundles[i]->pAlSettings.io.chptr = optarg;
-                    Bundles[i]->pAlSettings.status = STATUS_TRANSMITTER_STRING;
+                    Bundles[i]->alSettings.io.chptr = optarg;
+                    Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STRING;
                     break;
                 case 'x':
-                    Bundles[i]->pAlSettings.status = STATUS_TRANSMITTER_STREAM;
+                    Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
                     break;
                 case 'f':
-                    Bundles[i]->pLlSettings.IframeSize = (unsigned int)parsedNumber;
+                    Bundles[i]->llSettings.IframeSize = (unsigned int)parsedNumber;
                     break;
                 default:
                     errno = EINVAL;
@@ -206,7 +206,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
             }
         }
         optind = 1;
-        if ( !ioSet ) Bundles[i]->pAlSettings.status = STATUS_RECEIVER_STREAM;
+        if ( !ioSet ) Bundles[i]->alSettings.status = STATUS_RECEIVER_STREAM;
     }
 
     return 0;
