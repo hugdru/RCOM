@@ -9,6 +9,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include <termios.h>
+#include <stdlib.h>
 
 #define F 0x7e
 #define A_CSENDER_RRECEIVER 0x03
@@ -18,6 +19,9 @@
 #define C_DISC 0x11
 #define C_RR_RAW 0x05
 #define C_REJ_RAW 0x01
+
+#define ESC 0x7d
+#define STUFFING_XOR_BYTE 0x20
 
 #define SIZE_OF_FRAMESU 5
 #define CRC_8 0x9b
@@ -31,13 +35,14 @@ typedef struct LinkLayer {
 } LinkLayer;
 
 void alarm_handler(int signo);
-int buildFrameHeader(uint8_t A, uint8_t C, uint8_t *frame, uint16_t *frameSize);
-int buildFrameBody(uint8_t *packet, size_t packetSize); // uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess vai ser preciso aceder a isto
+uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize);
+int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess); // Build the part of the data and trailer without the stuffing
+uint8_t generateBcc(const uint8_t *data, uint16_t size);
 
 LinkLayer LLayer;
 
 // Tem de ser global por causa do llclose()
-size_t leftOversSize;
+size_t leftOversSize = 0;
 char *payloadsAndFooterLeftOver = NULL;
 
 bool blocked = false;
@@ -182,9 +187,10 @@ int llopen(void) {
 
 int lwrite(uint8_t *packet, size_t packetSize) {
 
-    static size_t nPayloadsAndFootersToProcess;
-    static char **payloadsAndFooter = NULL;
+    static size_t nPayloadsAndFootersToProcess = 0;
+    static uint8_t **payloadsAndFooter = NULL;
 
+    buildRawFramesBodies(packet,packetSize,payloadsAndFooter,&nPayloadsAndFootersToProcess);
     return 0;
 }
 
@@ -285,13 +291,118 @@ void alarm_handler(int signo) {
     alarmed = true;
 }
 
-int buildFrameHeader(uint8_t A, uint8_t C, uint8_t *frame, uint16_t *frameSize) {
+uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize) {
+    uint8_t *tempHeader;
+    uint8_t temp;
+    uint8_t size = 4;
+
+    if ( frameSize == NULL ) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    tempHeader = (uint8_t *) malloc( sizeof(uint8_t) * size);
+    tempHeader[0] = F;
+    tempHeader[1] = A;
+    tempHeader[2] = C;
+    tempHeader[3] = generateBcc(tempHeader+1, 2);
+
+    if ( tempHeader[3] == F  || tempHeader[3] == ESC ) {
+        size++;
+        tempHeader = (uint8_t *) realloc(tempHeader, size);
+        temp = tempHeader[3];
+        tempHeader[3] = ESC;
+        tempHeader[4] = ESC ^ STUFFING_XOR_BYTE;
+    }
+
+    *frameSize = size;
+    return tempHeader;
 }
 
-int buildFrameBody(uint8_t *packet, size_t packetSize) {
+int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess) {
 
+    uint8_t xorMe;
+    size_t i, t;
+    size_t temp;
+    size_t nCompletePayloadsAndFooters;
+    unsigned int fillUntil;
+
+    if ( packet == NULL || nPayloadsAndFootersToProcess == NULL ) return -1;
+
+    if ( leftOversSize != 0 ) {
+        if ( packetSize >= (LLayer.settings->IframeSize - leftOversSize) ) {
+            payloadsAndFooter = (uint8_t **) realloc(payloadsAndFooter, *nPayloadsAndFootersToProcess + 2);
+            payloadsAndFooter[*nPayloadsAndFootersToProcess] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize + 1 );
+            fillUntil = LLayer.settings->IframeSize;
+            for ( i = 0; i < leftOversSize; ++i) {
+                payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = payloadsAndFooterLeftOver[i];
+            }
+        } else fillUntil = packetSize;
+
+        xorMe = 0x00;
+        for ( i = leftOversSize; i < fillUntil; ++i) {
+            if ( fillUntil < LLayer.settings->IframeSize ) {
+                payloadsAndFooterLeftOver[i] = *packet;
+            } else {
+                payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = *packet;
+                xorMe ^= *packet;
+            }
+            ++packet;
+            --packetSize;
+        }
+        if ( i == LLayer.settings->IframeSize ) {
+            payloadsAndFooter[*nPayloadsAndFootersToProcess][i++] = xorMe;
+            payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = F;
+            *nPayloadsAndFootersToProcess = *nPayloadsAndFootersToProcess + 1;
+            leftOversSize = 0;
+        } else {
+            leftOversSize = i;
+            return 0;
+        }
+    }
+
+    nCompletePayloadsAndFooters = packetSize / LLayer.settings->IframeSize;
+    temp = *nPayloadsAndFootersToProcess + nCompletePayloadsAndFooters;
+    payloadsAndFooter = (uint8_t **) realloc(payloadsAndFooter, temp);
+    for( i = *nPayloadsAndFootersToProcess; i < temp; ++i) {
+        payloadsAndFooter[i] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize + 2 );
+        xorMe = 0x00;
+        for ( t = 0; t < LLayer.settings->IframeSize; ++t) {
+            payloadsAndFooter[i][t] = *packet;
+            xorMe ^= *packet;
+            --packetSize;
+            ++packet;
+        }
+        payloadsAndFooter[i][t++] = xorMe;
+        payloadsAndFooter[i][t] = F;
+    }
+    *nPayloadsAndFootersToProcess = i;
+
+    while(packetSize--) {
+        *payloadsAndFooterLeftOver = *packet;
+        ++packet;
+        ++leftOversSize;
+    }
+
+    return 0;
 }
 
+uint8_t generateBcc(const uint8_t *data, uint16_t size) {
+
+    size_t i;
+    uint8_t bcc = 0x00;
+
+    if ( data == NULL ) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    for( i = 0; i < size; ++i) {
+        bcc ^= data[i];
+    }
+
+    return bcc;
+}
 
 uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
 
