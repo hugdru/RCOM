@@ -1,3 +1,6 @@
+#ifndef LINK_LAYER_H
+#define LINK_LAYER_H
+
 #include "useful.h"
 #include "parser.h"
 
@@ -9,3 +12,4 @@ int lwrite(uint8_t *packet, size_t packetSize);
 int llread(uint8_t *packet);
 int llclose(void);
 
+#endif

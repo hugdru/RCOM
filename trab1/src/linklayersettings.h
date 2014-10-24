@@ -1,3 +1,6 @@
+#ifndef LINK_LAYER_SETTINGS_H
+#define LINK_LAYER_SETTINGS_H
+
 #include <termios.h>
 
 typedef struct {
@@ -8,3 +11,4 @@ typedef struct {
     tcflag_t baudRate;
 } LinkLayerSettings;
 
+#endif

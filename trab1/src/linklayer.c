@@ -449,7 +449,8 @@ uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
         if ( R & 0x80 ) R ^= CRC_8;
     }
 
-    for(size_t i = 0; i < 8; ++i) {
+    size_t i;
+    for(i = 0; i < 8; ++i) {
         R <<=1;
         if( R & 0x80 ) R ^= CRC_8;
     }

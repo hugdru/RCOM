@@ -1,3 +1,6 @@
+#ifndef APP_LAYER_SETTINGS_H
+#define APP_LAYER_SETTINGS_H
+
 #include <stdio.h>
 
 #define STATUS_RECEIVER_FILE 0x00
@@ -15,3 +18,4 @@ typedef struct {
     } io;
 } AppLayerSettings;
 
+#endif
