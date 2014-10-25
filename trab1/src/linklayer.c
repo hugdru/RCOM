@@ -50,13 +50,10 @@ bool blocked = false;
 bool alarmed = false;
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
-
     if ( blocked ) {
         fprintf(stderr, "You can only initialize once\n");
         return -1;
     }
-
-    payloadsAndFooterLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize );
 
     if ( ptr == NULL ) {
         errno = EINVAL;
@@ -64,6 +61,8 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     }
 
     LLayer.settings = ptr;
+
+    payloadsAndFooterLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize );
     LLayer.is_receiver = is_receiver;
     payloadsAndFooterLeftOver = NULL;
 
@@ -71,139 +70,125 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     return 0;
 }
 
+int stateMachine(uint8_t *packet, size_t packetSize) {
+	uint8_t ch;
+	int state = 0;
+
+	while(!alarmed) {
+		read(LLayer.serialFileDescriptor, &ch, 1);
+
+		if(ch == packet[state]) {
+			state++;
+			if(state == 6) { /* Chegou ao fim */
+				return 1;
+			}
+		}
+		else if(ch == packet[0]) {
+			state = 1;
+		}
+		else
+			state = 0;
+	}
+}
+
+
+
 int llopen(void) {
+	unsigned int tries = 0;
+    struct termios newtio;
 
-    /*bool first;*/
-    /*unsigned int tries = 0;*/
-    /*struct termios newtio;*/
-    /*uint8_t partOfFrame, state;*/
-    /*uint8_t *frameToSend;*/
-    /*uint16_t frameSize;*/
+    if ( !blocked ) {
+        fprintf(stderr, "You have to llinitialize first\n");
+        return -1;
+    }
 
-    /*if ( !blocked ) {*/
-        /*fprintf(stderr, "You have to llinitialize first\n");*/
-        /*return -1;*/
-    /*}*/
-
-  /*
+    /*
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
-  */
+    */
+    LLayer.serialFileDescriptor = open(LLayer.settings->port, O_RDWR | O_NOCTTY);
+    if ( LLayer.serialFileDescriptor == -1 ) {
+        perror(LLayer.settings->port);
+        return -1;
+    }
 
-    /*LLayer.serialFileDescriptor = open(LLayer.settings->port, O_RDWR | O_NOCTTY);*/
-    /*if ( LLayer.serialFileDescriptor == -1 ) {*/
-        /*perror(LLayer.settings->port);*/
-        /*return -1;*/
-    /*}*/
 
-    /*if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { [> save current port settings <]*/
-        /*perror("tcgetattr");*/
-        /*close(LLayer.serialFileDescriptor);*/
-        /*return -1;*/
-    /*}*/
+    if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { /* [> save current port settings <] */
+        perror("tcgetattr");
+        close(LLayer.serialFileDescriptor);
+        return -1;
+    }
 
-    /*bzero(&newtio, sizeof(newtio));*/
-    /*newtio.c_cflag = LLayer.settings->baudRate | CS8 | CLOCAL | CREAD;*/
-    /*newtio.c_iflag = IGNPAR;*/
-    /*newtio.c_oflag = 0;*/
+    bzero(&newtio, sizeof(newtio));
+    newtio.c_cflag = LLayer.settings->baudRate | CS8 | CLOCAL | CREAD;
+    newtio.c_iflag = IGNPAR;
+    newtio.c_oflag = 0;
 
     /* set input mode (non-canonical, no echo,...) */
-    /*newtio.c_lflag = 0;*/
+    newtio.c_lflag = 0;
+    newtio.c_cc[VTIME] = 1;  /* [> inter-character timer unused <] */
+    newtio.c_cc[VMIN] = 0;  /* [> blocking read until 5 chars received <] */
 
-    /*newtio.c_cc[VTIME]    = 1;   [> inter-character timer unused <]*/
-    /*newtio.c_cc[VMIN]     = 0;   [> blocking read until 5 chars received <]*/
 
-  /*
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
+   /*
+	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
     leitura do(s) próximo(s) caracter(es)
-  */
+	*/
+    tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);
 
-    /*tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);*/
+    if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {
+        perror("Failed to set new settings for port, tcsetattr");
+        close(LLayer.serialFileDescriptor);
+        return -1;
+    }
 
-    /*if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {*/
-        /*perror("Failed to set new settings for port, tcsetattr");*/
-        /*close(LLayer.serialFileDescriptor);*/
-        /*return -1;*/
-    /*}*/
     // New termios Structure set
-    /*signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals*/
+    signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
-    /*alarmed = false;*/
-    /*while(tries < LLayer.settings->numAttempts) {*/
+    uint8_t SET[5];
+    uint8_t UA[5];
 
-        /*if ( !LLayer.is_receiver ) {*/
-            /*frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize);*/
-            /*frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);*/
-            /*if ( frameToSend == NULL ) goto cleanUp;*/
-            /*frameToSend[frameSize-1] = F;*/
-            /*write(LLayer.serialFileDescriptor, frameToSend, 5);*/
-            /*alarm(3);*/
-        /*} else first = true;*/
+    SET[0] = F;
+    SET[1] = A_CSENDER_RRECEIVER;
+    SET[2] = C_SET;
+    SET[3] = SET[1]^SET[2];
+    SET[4] = F;
 
-        /*while(!alarmed) {*/
-            /*read(LLayer.serialFileDescriptor, &partOfFrame, 1);*/
+    UA[0] = F;
+    UA[1] = A_CSENDER_RRECEIVER;
+    UA[2] = C_UA;
+    UA[3] = UA[1] ^ UA[2];
+    UA[4] = F;
 
-            /*switch (state) {*/
-                /*case 0:*/
-                    /*if (partOfFrame == F)*/
-                        /*if ( LLayer.is_receiver && first ) {*/
-                            /*alarm(3);*/
-                            /*first = false;*/
-                        /*}*/
-                        /*state = 1;*/
-                    /*break;*/
-                /*case 1:*/
-                    /*if (partOfFrame == A)*/
-                        /*state = 2;*/
-                    /*else if (partOfFrame != F)*/
-                        /*state = 0;*/
-                    /*break;*/
-                /*case 2:*/
-                    /*if (partOfFrame == C)*/
-                        /*state = 3;*/
-                    /*else if (partOfFrame == F)*/
-                        /*state = 1;*/
-                    /*else*/
-                        /*state = 0;*/
-                    /*break;*/
-                /*case 3:*/
-                    /*if (partOfFrame == B)*/
-                        /*state = 4;*/
-                    /*else if (partOfFrame == F)*/
-                        /*state = 1;*/
-                    /*else*/
-                        /*state = 0;*/
-                    /*break;*/
-                /*case 4:*/
-                    /*if (partOfFrame == F)*/
-                        /*state = 5;*/
-                    /*else*/
-                        /*state = 0;*/
-                    /*break;*/
-                /*case 5:*/
-                    /*if ( LLayer.is_receiver ) {*/
-                        /*frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize);*/
-                        /*frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);*/
-                        /*if ( frameToSend == NULL ) goto cleanUp;*/
-                        /*frameToSend[frameSize-1] = F;*/
-                        /*write(LLayer.serialFileDescriptor,frameToSend,SIZE_OF_FRAMESU);*/
-                    /*}*/
-                    /*free(frameToSend);*/
-                    /*return 0;*/
-                /*default:*/
-                    /*return -1;*/
-            /*}*/
-        /*}*/
-        /*alarmed = false;*/
-        /*tries++;*/
-    /*}*/
-    /*errno = ECONNABORTED;*/
-/*cleanUp:*/
-    /*free(frameToSend);*/
-    /*tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));*/
-    /*close(LLayer.serialFileDescriptor);*/
-    /*return -1;*/
-    return 0;
+    alarmed = false;
+    int received = 0;
+
+    while(tries < LLayer.settings->numAttempts) {
+
+        if ( LLayer.is_receiver ) {
+        	alarm(3);
+        	received = stateMachine(SET, 5);
+        	if(received)
+        		write(LLayer.serialFileDescriptor, UA, 5);
+        }
+        else {
+        	write(LLayer.serialFileDescriptor, SET, 5);
+            alarm(3);
+            received = stateMachine(UA, 5);
+            printf("t2");
+        }
+
+        if(received)
+        	return 0;
+
+        alarmed = false;
+        tries++;
+    }
+
+    errno = ECONNABORTED;
+    tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));
+    close(LLayer.serialFileDescriptor);
+    return -1;
 }
 
 int llwrite(uint8_t *packet, size_t packetSize) {

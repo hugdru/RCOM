@@ -1,6 +1,7 @@
 #include "applayer.h"
 #include "linklayer.h"
 #include <string.h>
+#include <stdlib.h>
 
 #define IS_RECEIVER(n) (!((n)>>4))
 #define IS_TRANSMITTER(n) ((n)>>4)
@@ -27,34 +28,6 @@ typedef struct {
 
 AppLayer appLayer;
 
-/**
- * @desc Initializes appLayer struct and linkLayer struct
- * @arg Bundle* bundle: Parsed link and app layer settings
- * @return Retorna um número positivo em caso de sucesso e negativo em caso de erro
- */
-int init(Bundle *bundle) {
-	if(bundle == NULL) {
-		printf("Error: bundle is null\n");
-		return 1;
-	}
-
-	 appLayer.settings = &bundle->alSettings;
-
-	 if(appLayer.settings->io.fptr == NULL) {
-	 		printf("Error opening file '%s'\n", appLayer.fileInfo->fileName);
-	     	return -1;
-	 }
-
-	 if( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
-		 fclose(appLayer.settings->io.fptr);
-	     printf("Error: Cant's find file '%s' size", appLayer.fileInfo->fileName);
-	     return -1;
-	 }
-
-	 int fileSize = ftell(appLayer.settings->io.fptr);
-	 llinitialize(&bundle->llSettings, IS_RECEIVER(appLayer.settings->status));
-	 return 0;
-}
 
 
 /**
@@ -63,6 +36,78 @@ int init(Bundle *bundle) {
  * @arg size_t size: número de bytes de packet
  * @rrturn Retorna 1 quando a mensagem foi toda lida, 0 se não
  */
+int parserPacket(uint8_t* packet, size_t size);
+
+/**
+ * @des Reads message/file from sender
+ */
+void read();
+
+/**
+ * @desc Envia pacote de controlo do tipo START contendo o nome do ficheiro e tamanho
+ * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
+ */
+int writeStartPacket();
+
+/**
+ * @desc Envia pacote de controlo do tipo END contendo apenas o byte de controlo correspondendo a type end
+ * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
+ */
+int writeEndPacket();
+
+/**
+ * @des Envia pacote de controlo do tipo DATA com data recebida como argumento
+ * @arg uint8_t *data: data a ser empacotada e enviada
+ * @arg size_t size: número de bytes de data
+ * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
+ */
+int writeDataPacket(uint8_t *data, size_t size);
+
+/**
+ * @desc Sends message/file to the receiver
+ */
+void write();
+
+
+int initAppLayer(Bundle *bundle) {
+
+	if(bundle == NULL) {
+		printf("Error: bundle is null\n");
+		return 1;
+	}
+
+
+	appLayer.settings = &bundle->alSettings;
+
+	if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
+		if(appLayer.settings->io.fptr == NULL) {
+				printf("Error opening file '%s'\n", appLayer.fileInfo->fileName);
+				return -1;
+		}
+
+		if( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
+			 fclose(appLayer.settings->io.fptr);
+			 printf("Error: Cant's find file '%s' size", appLayer.fileInfo->fileName);
+			 return -1;
+		}
+		int fileSize = ftell(appLayer.settings->io.fptr);
+	}
+
+	llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
+
+	if( llopen() < 0) {
+		printf("Error: llopen()\n");
+		exit(1);
+	}
+
+	printf("After llopen()\n");
+	if(IS_RECEIVER(appLayer.settings->status))
+		read();
+	else write();
+
+	return 0;
+}
+
 int parserPacket(uint8_t* packet, size_t size) {
 	uint8_t C = packet[0];
 
@@ -120,10 +165,6 @@ int parserPacket(uint8_t* packet, size_t size) {
 	return 0;
 }
 
-
-/**
- * @des Reads message/file from sender
- */
 void read() {
 		uint8_t *packet;
 		size_t size;
@@ -135,12 +176,6 @@ void read() {
 		}
 }
 
-
-
-/**
- * @desc Envia pacote de controlo do tipo START contendo o nome do ficheiro e tamanho
- * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
- */
 int writeStartPacket() {
 	uint8_t filenameLength = strlen(appLayer.fileInfo->fileName);
 
@@ -152,23 +187,12 @@ int writeStartPacket() {
 	return llwrite(packet, packetSize);
 }
 
-/**
- * @desc Envia pacote de controlo do tipo END contendo apenas o byte de controlo correspondendo a type end
- * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
- */
 int writeEndPacket() {
 	uint8_t packet = C_END;
 
 	return llwrite(&packet, 1);
 }
 
-
-/**
- * @des Envia pacote de controlo do tipo DATA com data recebida como argumento
- * @arg uint8_t *data: data a ser empacotada e enviada
- * @arg size_t size: número de bytes de data
- * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
- */
 int writeDataPacket(uint8_t *data, size_t size) {
 	char packet[appLayer.settings->packetBodySize + 4];
 
@@ -176,9 +200,6 @@ int writeDataPacket(uint8_t *data, size_t size) {
 	return llwrite(packet, strlen(packet));
 }
 
-/**
- * @desc Sends message/file to the receiver
- */
 void write() {
 	size_t res;
 	bool end = false;

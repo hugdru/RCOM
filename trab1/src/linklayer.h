@@ -2,9 +2,9 @@
 #define LINK_LAYER_H
 
 #include "useful.h"
-#include "parser.h"
-
+#include "linklayersettings.h"
 #include <stdint.h>
+#include <stddef.h>
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver);
 int llopen(void);

@@ -4,8 +4,12 @@
 #include "useful.h"
 #include "bundle.h"
 
-
-int init(Bundle *bundle);
+/**
+ * @desc Initializes appLayer struct and linkLayer struct
+ * @arg Bundle* bundle: Parsed link and app layer settings
+ * @return Retorna um número positivo em caso de sucesso e negativo em caso de erro
+ */
+int initAppLayer(Bundle *bundle);
 
 
 #endif
