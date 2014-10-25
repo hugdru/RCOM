@@ -61,8 +61,9 @@ int init(Bundle *bundle) {
  * @desc Faz parser do pacote recebido
  * @arg uint8_t* packet: pacote recebido
  * @arg size_t size: número de bytes de packet
+ * @rrturn Retorna 1 quando a mensagem foi toda lida, 0 se não
  */
-void parserPacket(uint8_t* packet, size_t size) {
+int parserPacket(uint8_t* packet, size_t size) {
 	uint8_t C = packet[0];
 
 	if(C == C_DATA) {
@@ -87,33 +88,52 @@ void parserPacket(uint8_t* packet, size_t size) {
 			uint8_t length = packet[i++];
 			uint8_t value[length];
 
-			/*
+
 			strncpy (value, packet + i, length);
-			i *= length;
+			i += length;
 
 			switch(type) {
 				case TYPE_FILESIZE:
-					appLayer->fileInfo->fileSize = (int) value; // fileSize is in AppLayer
+					appLayer.fileInfo->fileSize = (int) value; // fileSize is in AppLayer
 					break;
 				case TYPE_FILENAME:
-					appLayer->fileInfo->fileName = fopen(value, "w"); //Creates a file, if exists erases the content first
-					if (appLayer.f == NULL) {
+					appLayer.fileInfo->fileName = value;
+					appLayer.settings->io.fptr = fopen(value, "w"); //Creates a file, if exists erases the content first
+					if (appLayer.settings->io.fptr == NULL) {
     					printf("Error opening file '%s'\n", value);
     					exit(1);
     				}
 					break;
 				default:
+					printf("Error: Start Packet type not correct\n");
+					exit(1);
 					break;
 			}
-			*/
+
 		}
 	}
 
 	else if(C == C_END) {
 		llclose();
+		return 1;
 	}
+	return 0;
 }
 
+
+/**
+ * @des Reads message/file from sender
+ */
+void read() {
+		uint8_t *packet;
+		size_t size;
+		int end = 0;
+
+		while(!end) {
+			size = llread(packet);
+			end = parserPacket(packet, size);
+		}
+}
 
 
 
@@ -150,30 +170,36 @@ int writeEndPacket() {
  * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
  */
 int writeDataPacket(uint8_t *data, size_t size) {
-	char packet[appLayer.settings->packetSize + 4];
+	char packet[appLayer.settings->packetBodySize + 4];
 
 	sprintf(packet,"%c%c%c%c%s", C_DATA, 1, size/256, size%256, data);
 	return llwrite(packet, strlen(packet));
 }
 
-
+/**
+ * @desc Sends message/file to the receiver
+ */
 void write() {
 	size_t res;
 	bool end = false;
-	uint8_t data[appLayer.settings->packetSize];
+	uint8_t data[appLayer.settings->packetBodySize];
 
 	writeStartPacket();
 
 	while(!end) {
 		if(appLayer.settings->status == STATUS_TRANSMITTER_FILE)
-			res = fread(data, 1, appLayer.settings->packetSize, appLayer.settings->io.fptr);
+			res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
+		else if(appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
+			int jaLidos = 10; //falta adicionar variavel a incrementar sempre que é lido mais x caracteres
+			strncpy(data, appLayer.settings->io.chptr+jaLidos, appLayer.settings->packetBodySize);
+		}
 		else {
-			//Por fazer, ler do stream e string
+			//Por fazer, ler stream
 		}
 
-		if(res < appLayer.settings->packetSize)
+		if(res < appLayer.settings->packetBodySize)
 			end = true;	// End of file
-			writeDataPacket(data, res);
+		writeDataPacket(data, res);
 	}
 
 	writeEndPacket();

@@ -27,12 +27,8 @@ int main(int argc, char *argv[])
         printf("packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
     }
 
-    // Em vez de usar as funções do link layer é para usar as funções do aplication layer
-    /*if ( llopen(Bundles[0]) == -1 ) goto cleanup;*/
-
-    /*llwrite(Bundles[0]);*/
-
-    /*if ( llclose(Bundles[0]) == -1 ) goto cleanup;*/
+    if( init(Bundles[0]) < 0)
+    	printf("Error: Initializing app layer\n");
 
     wipeBundles();
     return 0;
