@@ -26,6 +26,9 @@
 #define SIZE_OF_FRAMESU 5
 #define CRC_8 0x9b
 
+#define IS_IFRAMEHEAD true
+#define IS_FRAMESUHEAD false
+
 typedef struct LinkLayer {
     bool is_receiver;
     unsigned int sequenceNumber;
@@ -35,7 +38,7 @@ typedef struct LinkLayer {
 } LinkLayer;
 
 void alarm_handler(int signo);
-uint8_t* buildIFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize);
+uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
 int buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess);
 uint8_t generateBcc(const uint8_t *data, uint16_t size);
 uint8_t generate_crc8(const uint8_t *data, uint16_t size);
@@ -70,50 +73,53 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     return 0;
 }
 
-int stateMachine(uint8_t *packet, size_t packetSize) {
-	uint8_t ch;
-	int state = 0;
+/*int stateMachine(uint8_t *packet, size_t packetSize) {*/
+	/*uint8_t ch;*/
+	/*int state = 0;*/
 
-	while(!alarmed) {
-		read(LLayer.serialFileDescriptor, &ch, 1);
+	/*while(!alarmed) {*/
+		/*read(LLayer.serialFileDescriptor, &ch, 1);*/
 
-		if(ch == packet[state]) {
-			state++;
-			if(state == 6) { /* Chegou ao fim */
-				return 1;
-			}
-		}
-		else if(ch == packet[0]) {
-			state = 1;
-		}
-		else
-			state = 0;
-	}
-}
-
-
+		/*if(ch == packet[state]) {*/
+			/*state++;*/
+			/*if(state == 6) { [> Chegou ao fim <]*/
+				/*return 1;*/
+			/*}*/
+		/*}*/
+		/*else if(ch == packet[0]) {*/
+			/*state = 1;*/
+		/*}*/
+		/*else*/
+			/*state = 0;*/
+	/*}*/
+/*}*/
 
 int llopen(void) {
-	unsigned int tries = 0;
+    bool first, noEscYet;
+    unsigned int tries = 0;
     struct termios newtio;
+    uint8_t partOfFrame, state;
+    uint8_t *frameToSend;
+    uint16_t frameSize;
+    uint8_t storeReceivedA, storeReceivedC;
 
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize first\n");
         return -1;
     }
 
-    /*
+  /*
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
-    */
+  */
+
     LLayer.serialFileDescriptor = open(LLayer.settings->port, O_RDWR | O_NOCTTY);
     if ( LLayer.serialFileDescriptor == -1 ) {
         perror(LLayer.settings->port);
         return -1;
     }
 
-
-    if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { /* [> save current port settings <] */
+    if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { /* save current port settings */
         perror("tcgetattr");
         close(LLayer.serialFileDescriptor);
         return -1;
@@ -126,14 +132,15 @@ int llopen(void) {
 
     /* set input mode (non-canonical, no echo,...) */
     newtio.c_lflag = 0;
-    newtio.c_cc[VTIME] = 1;  /* [> inter-character timer unused <] */
-    newtio.c_cc[VMIN] = 0;  /* [> blocking read until 5 chars received <] */
 
+    newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
+    newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
-   /*
-	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
+  /*
+    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
     leitura do(s) próximo(s) caracter(es)
-	*/
+  */
+
     tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);
 
     if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {
@@ -145,47 +152,87 @@ int llopen(void) {
     // New termios Structure set
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
-    uint8_t SET[5];
-    uint8_t UA[5];
-
-    SET[0] = F;
-    SET[1] = A_CSENDER_RRECEIVER;
-    SET[2] = C_SET;
-    SET[3] = SET[1]^SET[2];
-    SET[4] = F;
-
-    UA[0] = F;
-    UA[1] = A_CSENDER_RRECEIVER;
-    UA[2] = C_UA;
-    UA[3] = UA[1] ^ UA[2];
-    UA[4] = F;
-
     alarmed = false;
-    int received = 0;
-
     while(tries < LLayer.settings->numAttempts) {
 
-        if ( LLayer.is_receiver ) {
-        	alarm(3);
-        	received = stateMachine(SET, 5);
-        	if(received)
-        		write(LLayer.serialFileDescriptor, UA, 5);
-        }
-        else {
-        	write(LLayer.serialFileDescriptor, SET, 5);
+        if ( !LLayer.is_receiver ) {
+            frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize,IS_FRAMESUHEAD);
+            if ( frameToSend == NULL ) goto cleanUp;
+            write(LLayer.serialFileDescriptor, frameToSend, 5);
             alarm(3);
-            received = stateMachine(UA, 5);
-            printf("t2");
+        } else first = true;
+
+        noEscYet = true;
+        while(!alarmed) {
+            read(LLayer.serialFileDescriptor, &partOfFrame, 1);
+
+            switch (state) {
+                case 0:
+                    if (partOfFrame == F)
+                        if ( LLayer.is_receiver && first ) {
+                            alarm(3);
+                            first = false;
+                        }
+                        state = 1;
+                    break;
+                case 1:
+                    if (partOfFrame == A_CSENDER_RRECEIVER) {
+                        state = 2;
+                        storeReceivedA = partOfFrame;
+                    } else if (partOfFrame != F)
+                        state = 0;
+                    break;
+                case 2:
+                    if ( ((partOfFrame == C_SET) && LLayer.is_receiver) ||
+                         ((partOfFrame == C_UA)  && !LLayer.is_receiver)
+                       ) {
+                        state = 3;
+                        storeReceivedC = partOfFrame;
+                    } else if (partOfFrame == F)
+                        state = 1;
+                    else
+                        state = 0;
+                    break;
+                case 3:
+                    if ( (partOfFrame == ESC) && noEscYet) {
+                        state = 3;
+                        noEscYet = false;
+                    } else {
+                        if ( noEscYet && (partOfFrame == (storeReceivedA ^ storeReceivedC)))
+                            state = 4;
+                        else if ( !noEscYet && (partOfFrame == ((storeReceivedA ^ storeReceivedC) ^ STUFFING_XOR_BYTE)))
+                            state = 4;
+                        else if (partOfFrame == F)
+                            state = 1;
+                        else
+                            state = 0;
+                        noEscYet = true;
+                    }
+                    break;
+                case 4:
+                    if (partOfFrame == F)
+                        state = 5;
+                    else
+                        state = 0;
+                    break;
+                case 5:
+                    if ( LLayer.is_receiver ) {
+                        frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize, IS_FRAMESUHEAD);
+                        if ( frameToSend == NULL ) goto cleanUp;
+                        write(LLayer.serialFileDescriptor,frameToSend,SIZE_OF_FRAMESU);
+                    }
+                    free(frameToSend);
+                    return 0;
+                default:
+                    return -1;
+            }
         }
-
-        if(received)
-        	return 0;
-
         alarmed = false;
         tries++;
     }
-
     errno = ECONNABORTED;
+cleanUp:
+    free(frameToSend);
     tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));
     close(LLayer.serialFileDescriptor);
     return -1;
@@ -300,10 +347,10 @@ void alarm_handler(int signo) {
     alarmed = true;
 }
 
-uint8_t* buildIFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize) {
+uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead) {
     uint8_t *tempHeader;
     uint8_t temp;
-    uint8_t size = 4;
+    uint8_t size = 6;
 
     if ( frameSize == NULL ) {
         errno = EINVAL;
@@ -311,17 +358,36 @@ uint8_t* buildIFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize) {
     }
 
     tempHeader = (uint8_t *) malloc( sizeof(uint8_t) * size);
+    if ( tempHeader == NULL ) return NULL;
     tempHeader[0] = F;
     tempHeader[1] = A;
     tempHeader[2] = C;
     tempHeader[3] = generateBcc(tempHeader+1, 2);
 
     if ( tempHeader[3] == F  || tempHeader[3] == ESC ) {
-        size++;
-        tempHeader = (uint8_t *) realloc(tempHeader, size);
         temp = tempHeader[3];
         tempHeader[3] = ESC;
         tempHeader[4] = temp ^ STUFFING_XOR_BYTE;
+        temp = 5;
+    } else temp = 4;
+
+    if ( temp == 5 && is_IframeHead ) tempHeader = (uint8_t *) realloc(tempHeader,--size);
+    else if ( temp == 4 && is_IframeHead) {
+        size -= 2;
+        tempHeader = (uint8_t *) realloc(tempHeader,size);
+        if ( tempHeader == NULL ) {
+            free(tempHeader);
+            return NULL;
+        }
+    } else if ( !is_IframeHead ) {
+        tempHeader[temp] = F;
+        if ( temp == 4 ) {
+            tempHeader = (uint8_t *) realloc(tempHeader,--size);
+            if ( tempHeader == NULL ) {
+                free(tempHeader);
+                return NULL;
+            }
+        }
     }
 
     *frameSize = size;
