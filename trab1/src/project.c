@@ -25,12 +25,6 @@ int main(int argc, char *argv[])
         printf("status: %d\n", Bundles[i]->alSettings.status);
     }
 
-    // Em vez de usar as funções do link layer é para usar as funções do aplication layer
-    /*if ( llopen(Bundles[0]) == -1 ) goto cleanup;*/
-
-    /*llwrite(Bundles[0]);*/
-
-    /*if ( llclose(Bundles[0]) == -1 ) goto cleanup;*/
 
     wipeBundles();
     return 0;

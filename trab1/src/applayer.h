@@ -4,4 +4,8 @@
 #include "useful.h"
 #include "bundle.h"
 
+
+int init(Bundle *bundle);
+
+
 #endif

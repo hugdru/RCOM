@@ -1,11 +1,180 @@
 #include "applayer.h"
 #include "linklayer.h"
+#include <string.h>
 
 #define IS_RECEIVER(n) (!((n)>>4))
 #define IS_TRANSMITTER(n) ((n)>>4)
 
-typedef struct AppLayer {
+// Control byte types
+#define C_DATA 0x01
+#define C_START 0x02
+#define C_END 0x03
+
+// Start Packet Argument Types
+#define TYPE_FILESIZE 0
+#define TYPE_FILENAME 1
+
+typedef struct {
+    unsigned int fileSize;
+    char * fileName;
+} FileInfo;
+
+typedef struct {
     int fileDescriptor;
+    FileInfo *fileInfo;
     AppLayerSettings *settings;
 } AppLayer;
 
+AppLayer appLayer;
+
+/**
+ * @desc Initializes appLayer struct and linkLayer struct
+ * @arg Bundle* bundle: Parsed link and app layer settings
+ * @return Retorna um número positivo em caso de sucesso e negativo em caso de erro
+ */
+int init(Bundle *bundle) {
+	if(bundle == NULL) {
+		printf("Error: bundle is null\n");
+		return 1;
+	}
+
+	 appLayer.settings = &bundle->alSettings;
+
+	 if(appLayer.settings->io.fptr == NULL) {
+	 		printf("Error opening file '%s'\n", appLayer.fileInfo->fileName);
+	     	return -1;
+	 }
+
+	 if( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
+		 fclose(appLayer.settings->io.fptr);
+	     printf("Error: Cant's find file '%s' size", appLayer.fileInfo->fileName);
+	     return -1;
+	 }
+
+	 int fileSize = ftell(appLayer.settings->io.fptr);
+	 llinitialize(&bundle->llSettings, IS_RECEIVER(appLayer.settings->status));
+	 return 0;
+}
+
+
+/**
+ * @desc Faz parser do pacote recebido
+ * @arg uint8_t* packet: pacote recebido
+ * @arg size_t size: número de bytes de packet
+ */
+void parserPacket(uint8_t* packet, size_t size) {
+	uint8_t C = packet[0];
+
+	if(C == C_DATA) {
+		uint8_t L2 = packet[2];
+		uint8_t L1 = packet[3];
+		uint32_t dataSize = 256 * L2 + L1;
+
+		int i;
+		for(i = 0; i < dataSize; i++) {
+			if(appLayer.settings->status == STATUS_RECEIVER_FILE)
+				fprintf(appLayer.settings->io.fptr, "%c", packet[4+i]);
+
+			else if(appLayer.settings->status == STATUS_RECEIVER_STREAM)
+				printf("%c", packet[4+i]);
+		}
+	}
+
+	else if(C == C_START) {
+		size_t i = 1;
+		while(i < size) {
+			uint8_t type = packet[i++];
+			uint8_t length = packet[i++];
+			uint8_t value[length];
+
+			/*
+			strncpy (value, packet + i, length);
+			i *= length;
+
+			switch(type) {
+				case TYPE_FILESIZE:
+					appLayer->fileInfo->fileSize = (int) value; // fileSize is in AppLayer
+					break;
+				case TYPE_FILENAME:
+					appLayer->fileInfo->fileName = fopen(value, "w"); //Creates a file, if exists erases the content first
+					if (appLayer.f == NULL) {
+    					printf("Error opening file '%s'\n", value);
+    					exit(1);
+    				}
+					break;
+				default:
+					break;
+			}
+			*/
+		}
+	}
+
+	else if(C == C_END) {
+		llclose();
+	}
+}
+
+
+
+
+/**
+ * @desc Envia pacote de controlo do tipo START contendo o nome do ficheiro e tamanho
+ * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
+ */
+int writeStartPacket() {
+	uint8_t filenameLength = strlen(appLayer.fileInfo->fileName);
+
+	uint8_t packetSize = filenameLength + 9; //1 byte do type, 2 para cada parametro para o TL e fileSizeLength e filenameLength
+	uint8_t packet[packetSize];
+
+	sprintf(packet, "%02x:%02x:%d%d%02x:%02x:%s", C_START, TYPE_FILESIZE, (int) sizeof(int), appLayer.fileInfo->fileSize, TYPE_FILENAME, filenameLength, appLayer.fileInfo->fileName);
+
+	return llwrite(packet, packetSize);
+}
+
+/**
+ * @desc Envia pacote de controlo do tipo END contendo apenas o byte de controlo correspondendo a type end
+ * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
+ */
+int writeEndPacket() {
+	uint8_t packet = C_END;
+
+	return llwrite(&packet, 1);
+}
+
+
+/**
+ * @des Envia pacote de controlo do tipo DATA com data recebida como argumento
+ * @arg uint8_t *data: data a ser empacotada e enviada
+ * @arg size_t size: número de bytes de data
+ * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
+ */
+int writeDataPacket(uint8_t *data, size_t size) {
+	char packet[appLayer.settings->packetSize + 4];
+
+	sprintf(packet,"%c%c%c%c%s", C_DATA, 1, size/256, size%256, data);
+	return llwrite(packet, strlen(packet));
+}
+
+
+void write() {
+	size_t res;
+	bool end = false;
+	uint8_t data[appLayer.settings->packetSize];
+
+	writeStartPacket();
+
+	while(!end) {
+		if(appLayer.settings->status == STATUS_TRANSMITTER_FILE)
+			res = fread(data, 1, appLayer.settings->packetSize, appLayer.settings->io.fptr);
+		else {
+			//Por fazer, ler do stream e string
+		}
+
+		if(res < appLayer.settings->packetSize)
+			end = true;	// End of file
+			writeDataPacket(data, res);
+	}
+
+	writeEndPacket();
+}

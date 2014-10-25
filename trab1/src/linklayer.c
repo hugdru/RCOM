@@ -152,13 +152,13 @@ int llopen(void) {
                         state = 1;
                     break;
                 case 1:
-                    if (partOfFrame == A)
+                    if (partOfFrame == A_CSENDER_RRECEIVER)
                         state = 2;
                     else if (partOfFrame != F)
                         state = 0;
                     break;
                 case 2:
-                    if (partOfFrame == C)
+                    if (partOfFrame == C_SET)
                         state = 3;
                     else if (partOfFrame == F)
                         state = 1;
@@ -166,7 +166,7 @@ int llopen(void) {
                         state = 0;
                     break;
                 case 3:
-                    if (partOfFrame == B)
+                    if (partOfFrame == (A_CSENDER_RRECEIVER ^ C_SET))
                         state = 4;
                     else if (partOfFrame == F)
                         state = 1;
@@ -204,7 +204,7 @@ cleanUp:
     return -1;
 }
 
-int lwrite(uint8_t *packet, size_t packetSize) {
+int llwrite(uint8_t *packet, size_t packetSize) {
 
     size_t nPayloadsAndFootersToProcess = 0;
     uint8_t **payloadsAndFooter = NULL;

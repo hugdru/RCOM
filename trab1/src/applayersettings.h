@@ -12,6 +12,7 @@
 
 typedef struct {
     int status;
+    unsigned int packetSize;
     union Io {
         char *chptr;
         FILE *fptr;
