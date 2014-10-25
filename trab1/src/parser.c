@@ -13,7 +13,8 @@
 #define DEFAULT_MODEMDEVICE "/dev/ttyS0"
 #define DEFAULT_TIMEOUT 3
 #define DEFAULT_NUMATTEMPTS 3
-#define DEFAULT_IFRAME_SIZE 100
+#define DEFAULT_PAYLOAD_SIZE 100
+#define DEFAULT_PACKETBODY_SIZE 50
 
 unsigned long parse_ulong(char const * const str, int base); // From the function manual
 
@@ -37,7 +38,8 @@ void print_usage(char **argv) {
     printf(" -t  Number\tSeconds to timeout, defaults to 3 seconds\n");
     printf(" -r  Number\tNumber of retries before aborting connection, defaults to 3\n");
     printf(" -n  String\tName you wish to assign to this connection\n");
-    printf(" -f  Number\tTamanho máximo do campo de informação das tramas I (sem stuffing)\n");
+    printf(" -f  Number\tTamanho máximo do payload das tramas I (sem stuffing)\n");
+    printf(" -s  Number\tTamanho máximo da parte do pacote(body) que contém a informação útil\n");
 
     printf("\nMODE");
     printf("\n Sender:\n");
@@ -56,7 +58,7 @@ void print_usage(char **argv) {
     printf("cat file | %s -N 2 -d '/dev/ttyS1' -d '/dev/ttyS2' -x\n", ptr);
 }
 
-int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
+Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
 
     int c, retn;
     unsigned int checkNDuplication = 0;
@@ -67,6 +69,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
     size_t i;
     unsigned long parsedNumber;
     regex_t deviceRegex;
+    Bundle **Bundles;
 
     *NBundles = 1;
 
@@ -79,7 +82,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                 break;
             } else {
                 fprintf(stderr, "The -N option must be followed by a number space separated or adjoined");
-                return -1;
+                return NULL;
             }
         } else if ( strncmp(argv[i],"+",1) == 0) {
             ++numberOfSeparators;
@@ -95,18 +98,20 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
         Bundles[i] = (Bundle *) malloc(sizeof(Bundle));
         // Set defaults to all Bundles
         Bundles[i]->llSettings.baudRate = DEFAULT_BAUDRATE;
-        if ( *NBundles == 1 ) Bundles[i]->llSettings.port = DEFAULT_MODEMDEVICE;
+        Bundles[i]->llSettings.port = DEFAULT_MODEMDEVICE;
         Bundles[i]->llSettings.timeout = DEFAULT_TIMEOUT;
         Bundles[i]->llSettings.numAttempts = DEFAULT_NUMATTEMPTS;
-        Bundles[i]->llSettings.IframeSize = DEFAULT_IFRAME_SIZE;
+        Bundles[i]->llSettings.payloadSize = DEFAULT_PAYLOAD_SIZE;
         Bundles[i]->alSettings.status = STATUS_UNSET;
         Bundles[i]->alSettings.io.fptr= NULL;
+        Bundles[i]->alSettings.packetBodySize = DEFAULT_PACKETBODY_SIZE;
+        Bundles[i]->name = NULL;
     }
 
     retn = regcomp(&deviceRegex,"/dev/ttyS[0-9][0-9]*",0);
     if(retn) {
         fprintf(stderr, "Could not compile regex\n");
-        return -1;
+        return NULL;
     }
     // Parse stuff for each Tunnel
     subArgv = argv;
@@ -125,21 +130,21 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
 
         if ( (i == 0) && (subArgc == argc) && (*NBundles != 1) ) {
             errno = EINVAL;
-            return -1;
+            return NULL;
         }
 
-        while ( (c = getopt((int)subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:f:x")) != -1 ) {
+        while ( (c = getopt((int)subArgc, oldSubArgv,"N:b:d:t:r:n:S:R:m:f:s:x")) != -1 ) {
 
-            if ( c == 'b' || c == 't' || c == 'r' || c == 'f' ) {
+            if ( c == 'b' || c == 't' || c == 'r' || c == 'f' || c == 's' ) {
                 parsedNumber = parse_ulong(optarg,10);
                 if ( parsedNumber == ULONG_MAX ) {
                     fprintf(stderr, "-%c must be followed by a number\n", c);
-                    return -1;
+                    return NULL;
                 }
             } else if ( c == 'S' || c == 'R' || c == 'x' || c == 'm' ) {
                 if ( ioSet ) {
                     fprintf(stderr, "There can only be a mode for each tunnel");
-                    return -1;
+                    return NULL;
                 }
                 ioSet = true;
             }
@@ -149,7 +154,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                     if ( checkNDuplication > 1 ) {
                         fprintf(stderr, "There can only be a -N option");
                         errno = EINVAL;
-                        return -1;
+                        return NULL;
                     }
                     ++checkNDuplication;
                     break;
@@ -162,7 +167,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                     if ( retn == REG_NOMATCH || retn != 0 ) {
                         fprintf(stderr, "Not a proper device file, expected /dev/ttyS[0-9]+");
                         errno = EINVAL;
-                        return -1;
+                        return NULL;
                     }
                     Bundles[i]->llSettings.port = optarg;
                     break;
@@ -178,14 +183,14 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                 case 'S':
                     if ( (Bundles[i]->alSettings.io.fptr = fopen(optarg,"rb")) == NULL ) {
                         fprintf(stderr, "Error opening the file for reading\n");
-                        return -1;
+                        return NULL;
                     }
                     Bundles[i]->alSettings.status = STATUS_TRANSMITTER_FILE;
                     break;
                 case 'R':
                     if ( (Bundles[i]->alSettings.io.fptr = fopen(optarg,"w+b")) == NULL ) {
                         fprintf(stderr, "Error opening the file for writing\n");
-                        return -1;
+                        return NULL;
                     }
                     Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE;
                     break;
@@ -193,15 +198,18 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
                     Bundles[i]->alSettings.io.chptr = optarg;
                     Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STRING;
                     break;
+                case 'f':
+                    Bundles[i]->llSettings.payloadSize = (unsigned int)parsedNumber;
+                    break;
+                case 's':
+                    Bundles[i]->alSettings.packetBodySize = (unsigned int)parsedNumber;
+                    break;
                 case 'x':
                     Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
                     break;
-                case 'f':
-                    Bundles[i]->llSettings.IframeSize = (unsigned int)parsedNumber;
-                    break;
                 default:
                     errno = EINVAL;
-                    return -1;
+                    return NULL;
                     break;
             }
         }
@@ -209,7 +217,7 @@ int parse_args(int argc, char **argv, size_t *NBundles, Bundle **Bundles) {
         if ( !ioSet ) Bundles[i]->alSettings.status = STATUS_RECEIVER_STREAM;
     }
 
-    return 0;
+    return Bundles;
 }
 
 unsigned long parse_ulong(char const * const str, int base) {

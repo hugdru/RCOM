@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "applayer.h"
 
 void wipeBundles(void);
 
@@ -9,22 +10,29 @@ int main(int argc, char *argv[])
 {
     int i = 0;
 
-    i = parse_args(argc, argv, &NBundles, Bundles);
-    if ( i == -1 ) {
+    Bundles = parse_args(argc, argv, &NBundles);
+    if ( Bundles == NULL) {
         print_usage(argv);
         goto cleanup;
     }
 
     printf("NBundles: %lu\n", NBundles);
     for(i = 0; i < (int)NBundles; ++i) {
-        printf("Name: %s\n", Bundles[i]->name);
+        if ( Bundles[i]->name != NULL) printf("Name: %s\n", Bundles[i]->name);
         printf("baudRate: %d\n", Bundles[i]->llSettings.baudRate);
-        printf("port: %s\n", Bundles[i]->llSettings.port);
+        if ( Bundles[i]->llSettings.port != NULL ) printf("port: %s\n", Bundles[i]->llSettings.port);
         printf("timeout: %d\n", Bundles[i]->llSettings.timeout);
         printf("numAttempts: %d\n", Bundles[i]->llSettings.numAttempts);
         printf("status: %d\n", Bundles[i]->alSettings.status);
+        printf("packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
     }
 
+    // Em vez de usar as funções do link layer é para usar as funções do aplication layer
+    /*if ( llopen(Bundles[0]) == -1 ) goto cleanup;*/
+
+    /*llwrite(Bundles[0]);*/
+
+    /*if ( llclose(Bundles[0]) == -1 ) goto cleanup;*/
 
     wipeBundles();
     return 0;

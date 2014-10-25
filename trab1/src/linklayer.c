@@ -35,9 +35,10 @@ typedef struct LinkLayer {
 } LinkLayer;
 
 void alarm_handler(int signo);
-uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize);
-int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess); // Build the part of the data and trailer without the stuffing
+uint8_t* buildIFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize);
+int buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess);
 uint8_t generateBcc(const uint8_t *data, uint16_t size);
+uint8_t generate_crc8(const uint8_t *data, uint16_t size);
 
 LinkLayer LLayer;
 
@@ -55,7 +56,7 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
         return -1;
     }
 
-    payloadsAndFooterLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize );
+    payloadsAndFooterLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize );
 
     if ( ptr == NULL ) {
         errno = EINVAL;
@@ -72,136 +73,137 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 
 int llopen(void) {
 
-    bool first;
-    unsigned int tries = 0;
-    struct termios newtio;
-    uint8_t partOfFrame, state;
-    uint8_t *frameToSend;
-    uint16_t frameSize;
+    /*bool first;*/
+    /*unsigned int tries = 0;*/
+    /*struct termios newtio;*/
+    /*uint8_t partOfFrame, state;*/
+    /*uint8_t *frameToSend;*/
+    /*uint16_t frameSize;*/
 
-    if ( !blocked ) {
-        fprintf(stderr, "You have to llinitialize first\n");
-        return -1;
-    }
+    /*if ( !blocked ) {*/
+        /*fprintf(stderr, "You have to llinitialize first\n");*/
+        /*return -1;*/
+    /*}*/
 
   /*
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
   */
 
-    LLayer.serialFileDescriptor = open(LLayer.settings->port, O_RDWR | O_NOCTTY);
-    if ( LLayer.serialFileDescriptor == -1 ) {
-        perror(LLayer.settings->port);
-        return -1;
-    }
+    /*LLayer.serialFileDescriptor = open(LLayer.settings->port, O_RDWR | O_NOCTTY);*/
+    /*if ( LLayer.serialFileDescriptor == -1 ) {*/
+        /*perror(LLayer.settings->port);*/
+        /*return -1;*/
+    /*}*/
 
-    if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { /* save current port settings */
-        perror("tcgetattr");
-        close(LLayer.serialFileDescriptor);
-        return -1;
-    }
+    /*if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { [> save current port settings <]*/
+        /*perror("tcgetattr");*/
+        /*close(LLayer.serialFileDescriptor);*/
+        /*return -1;*/
+    /*}*/
 
-    bzero(&newtio, sizeof(newtio));
-    newtio.c_cflag = LLayer.settings->baudRate | CS8 | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-    newtio.c_oflag = 0;
+    /*bzero(&newtio, sizeof(newtio));*/
+    /*newtio.c_cflag = LLayer.settings->baudRate | CS8 | CLOCAL | CREAD;*/
+    /*newtio.c_iflag = IGNPAR;*/
+    /*newtio.c_oflag = 0;*/
 
     /* set input mode (non-canonical, no echo,...) */
-    newtio.c_lflag = 0;
+    /*newtio.c_lflag = 0;*/
 
-    newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
+    /*newtio.c_cc[VTIME]    = 1;   [> inter-character timer unused <]*/
+    /*newtio.c_cc[VMIN]     = 0;   [> blocking read until 5 chars received <]*/
 
   /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
     leitura do(s) próximo(s) caracter(es)
   */
 
-    tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);
+    /*tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);*/
 
-    if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {
-        perror("Failed to set new settings for port, tcsetattr");
-        close(LLayer.serialFileDescriptor);
-        return -1;
-    }
+    /*if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {*/
+        /*perror("Failed to set new settings for port, tcsetattr");*/
+        /*close(LLayer.serialFileDescriptor);*/
+        /*return -1;*/
+    /*}*/
     // New termios Structure set
-    signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
+    /*signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals*/
 
-    alarmed = false;
-    while(tries < LLayer.settings->numAttempts) {
+    /*alarmed = false;*/
+    /*while(tries < LLayer.settings->numAttempts) {*/
 
-        if ( !LLayer.is_receiver ) {
-            frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize);
-            frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);
-            if ( frameToSend == NULL ) goto cleanUp;
-            frameToSend[frameSize-1] = F;
-            write(LLayer.serialFileDescriptor, frameToSend, 5);
-            alarm(3);
-        } else first = true;
+        /*if ( !LLayer.is_receiver ) {*/
+            /*frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize);*/
+            /*frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);*/
+            /*if ( frameToSend == NULL ) goto cleanUp;*/
+            /*frameToSend[frameSize-1] = F;*/
+            /*write(LLayer.serialFileDescriptor, frameToSend, 5);*/
+            /*alarm(3);*/
+        /*} else first = true;*/
 
-        while(!alarmed) {
-            read(LLayer.serialFileDescriptor, &partOfFrame, 1);
+        /*while(!alarmed) {*/
+            /*read(LLayer.serialFileDescriptor, &partOfFrame, 1);*/
 
-            switch (state) {
-                case 0:
-                    if (partOfFrame == F)
-                        if ( LLayer.is_receiver && first ) {
-                            alarm(3);
-                            first = false;
-                        }
-                        state = 1;
-                    break;
-                case 1:
-                    if (partOfFrame == A_CSENDER_RRECEIVER)
-                        state = 2;
-                    else if (partOfFrame != F)
-                        state = 0;
-                    break;
-                case 2:
-                    if (partOfFrame == C_SET)
-                        state = 3;
-                    else if (partOfFrame == F)
-                        state = 1;
-                    else
-                        state = 0;
-                    break;
-                case 3:
-                    if (partOfFrame == (A_CSENDER_RRECEIVER ^ C_SET))
-                        state = 4;
-                    else if (partOfFrame == F)
-                        state = 1;
-                    else
-                        state = 0;
-                    break;
-                case 4:
-                    if (partOfFrame == F)
-                        state = 5;
-                    else
-                        state = 0;
-                    break;
-                case 5:
-                    if ( LLayer.is_receiver ) {
-                        frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize);
-                        frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);
-                        if ( frameToSend == NULL ) goto cleanUp;
-                        frameToSend[frameSize-1] = F;
-                        write(LLayer.serialFileDescriptor,frameToSend,SIZE_OF_FRAMESU);
-                    }
-                    free(frameToSend);
-                    return 0;
-                default:
-                    return -1;
-            }
-        }
-        alarmed = false;
-        tries++;
-    }
-    errno = ECONNABORTED;
-cleanUp:
-    free(frameToSend);
-    tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));
-    close(LLayer.serialFileDescriptor);
-    return -1;
+            /*switch (state) {*/
+                /*case 0:*/
+                    /*if (partOfFrame == F)*/
+                        /*if ( LLayer.is_receiver && first ) {*/
+                            /*alarm(3);*/
+                            /*first = false;*/
+                        /*}*/
+                        /*state = 1;*/
+                    /*break;*/
+                /*case 1:*/
+                    /*if (partOfFrame == A)*/
+                        /*state = 2;*/
+                    /*else if (partOfFrame != F)*/
+                        /*state = 0;*/
+                    /*break;*/
+                /*case 2:*/
+                    /*if (partOfFrame == C)*/
+                        /*state = 3;*/
+                    /*else if (partOfFrame == F)*/
+                        /*state = 1;*/
+                    /*else*/
+                        /*state = 0;*/
+                    /*break;*/
+                /*case 3:*/
+                    /*if (partOfFrame == B)*/
+                        /*state = 4;*/
+                    /*else if (partOfFrame == F)*/
+                        /*state = 1;*/
+                    /*else*/
+                        /*state = 0;*/
+                    /*break;*/
+                /*case 4:*/
+                    /*if (partOfFrame == F)*/
+                        /*state = 5;*/
+                    /*else*/
+                        /*state = 0;*/
+                    /*break;*/
+                /*case 5:*/
+                    /*if ( LLayer.is_receiver ) {*/
+                        /*frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize);*/
+                        /*frameToSend = (uint8_t *) realloc(frameToSend, ++frameSize);*/
+                        /*if ( frameToSend == NULL ) goto cleanUp;*/
+                        /*frameToSend[frameSize-1] = F;*/
+                        /*write(LLayer.serialFileDescriptor,frameToSend,SIZE_OF_FRAMESU);*/
+                    /*}*/
+                    /*free(frameToSend);*/
+                    /*return 0;*/
+                /*default:*/
+                    /*return -1;*/
+            /*}*/
+        /*}*/
+        /*alarmed = false;*/
+        /*tries++;*/
+    /*}*/
+    /*errno = ECONNABORTED;*/
+/*cleanUp:*/
+    /*free(frameToSend);*/
+    /*tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));*/
+    /*close(LLayer.serialFileDescriptor);*/
+    /*return -1;*/
+    return 0;
 }
 
 int llwrite(uint8_t *packet, size_t packetSize) {
@@ -209,7 +211,7 @@ int llwrite(uint8_t *packet, size_t packetSize) {
     size_t nPayloadsAndFootersToProcess = 0;
     uint8_t **payloadsAndFooter = NULL;
 
-    buildRawFramesBodies(packet,packetSize,payloadsAndFooter,&nPayloadsAndFootersToProcess);
+    buildUnstuffedFramesBodies(packet,packetSize,payloadsAndFooter,&nPayloadsAndFootersToProcess);
     return 0;
 }
 
@@ -313,7 +315,7 @@ void alarm_handler(int signo) {
     alarmed = true;
 }
 
-uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize) {
+uint8_t* buildIFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize) {
     uint8_t *tempHeader;
     uint8_t temp;
     uint8_t size = 4;
@@ -334,28 +336,28 @@ uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize) {
         tempHeader = (uint8_t *) realloc(tempHeader, size);
         temp = tempHeader[3];
         tempHeader[3] = ESC;
-        tempHeader[4] = ESC ^ STUFFING_XOR_BYTE;
+        tempHeader[4] = temp ^ STUFFING_XOR_BYTE;
     }
 
     *frameSize = size;
     return tempHeader;
 }
 
-int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess) {
+int buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess) {
 
     uint8_t xorMe;
     size_t i, t;
     size_t temp;
     size_t nCompletePayloadsAndFooters;
-    unsigned int fillUntil;
+    size_t fillUntil;
 
     if ( packet == NULL || nPayloadsAndFootersToProcess == NULL ) return -1;
 
     if ( leftOversSize != 0 ) {
-        if ( packetSize >= (LLayer.settings->IframeSize - leftOversSize) ) {
+        if ( packetSize >= (LLayer.settings->payloadSize - leftOversSize) ) {
             payloadsAndFooter = (uint8_t **) realloc(payloadsAndFooter, *nPayloadsAndFootersToProcess);
-            payloadsAndFooter[*nPayloadsAndFootersToProcess] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize + 2 );
-            fillUntil = LLayer.settings->IframeSize;
+            payloadsAndFooter[*nPayloadsAndFootersToProcess] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
+            fillUntil = LLayer.settings->payloadSize;
             for ( i = 0; i < leftOversSize; ++i) {
                 payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = payloadsAndFooterLeftOver[i];
             }
@@ -363,7 +365,7 @@ int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsA
 
         xorMe = 0x00;
         for ( i = leftOversSize; i < fillUntil; ++i) {
-            if ( fillUntil < LLayer.settings->IframeSize ) {
+            if ( fillUntil < LLayer.settings->payloadSize ) {
                 payloadsAndFooterLeftOver[i] = *packet;
             } else {
                 payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = *packet;
@@ -372,7 +374,7 @@ int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsA
             ++packet;
             --packetSize;
         }
-        if ( i == LLayer.settings->IframeSize ) {
+        if ( i == LLayer.settings->payloadSize ) {
             payloadsAndFooter[*nPayloadsAndFootersToProcess][i++] = xorMe;
             payloadsAndFooter[*nPayloadsAndFootersToProcess][i] = F;
             *nPayloadsAndFootersToProcess = *nPayloadsAndFootersToProcess + 1;
@@ -383,13 +385,13 @@ int buildRawFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsA
         }
     }
 
-    nCompletePayloadsAndFooters = packetSize / LLayer.settings->IframeSize;
+    nCompletePayloadsAndFooters = packetSize / LLayer.settings->payloadSize;
     temp = *nPayloadsAndFootersToProcess + nCompletePayloadsAndFooters;
     payloadsAndFooter = (uint8_t **) realloc(payloadsAndFooter, temp);
     for( i = *nPayloadsAndFootersToProcess; i < temp; ++i) {
-        payloadsAndFooter[i] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->IframeSize + 2 );
+        payloadsAndFooter[i] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
         xorMe = 0x00;
-        for ( t = 0; t < LLayer.settings->IframeSize; ++t) {
+        for ( t = 0; t < LLayer.settings->payloadSize; ++t) {
             payloadsAndFooter[i][t] = *packet;
             xorMe ^= *packet;
             --packetSize;
@@ -416,7 +418,7 @@ uint8_t generateBcc(const uint8_t *data, uint16_t size) {
 
     if ( data == NULL ) {
         errno = EINVAL;
-        return -1;
+        return 0;
     }
 
     for( i = 0; i < size; ++i) {
@@ -449,8 +451,7 @@ uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
         if ( R & 0x80 ) R ^= CRC_8;
     }
 
-    size_t i;
-    for(i = 0; i < 8; ++i) {
+    for(size_t i = 0; i < 8; ++i) {
         R <<=1;
         if( R & 0x80 ) R ^= CRC_8;
     }
