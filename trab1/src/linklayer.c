@@ -23,7 +23,6 @@
 #define ESC 0x7d
 #define STUFFING_XOR_BYTE 0x20
 
-#define SIZE_OF_FRAMESU 5
 #define CRC_8 0x9b
 
 #define IS_IFRAMEHEAD true
@@ -72,27 +71,6 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     blocked = true;
     return 0;
 }
-
-/*int stateMachine(uint8_t *packet, size_t packetSize) {*/
-	/*uint8_t ch;*/
-	/*int state = 0;*/
-
-	/*while(!alarmed) {*/
-		/*read(LLayer.serialFileDescriptor, &ch, 1);*/
-
-		/*if(ch == packet[state]) {*/
-			/*state++;*/
-			/*if(state == 6) { [> Chegou ao fim <]*/
-				/*return 1;*/
-			/*}*/
-		/*}*/
-		/*else if(ch == packet[0]) {*/
-			/*state = 1;*/
-		/*}*/
-		/*else*/
-			/*state = 0;*/
-	/*}*/
-/*}*/
 
 int llopen(void) {
     bool first, noEscYet;
@@ -152,15 +130,19 @@ int llopen(void) {
     // New termios Structure set
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
+    if ( LLayer.is_receiver ) frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize, IS_FRAMESUHEAD);
+    else frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize, IS_FRAMESUHEAD);
+    if ( frameToSend == NULL ) goto cleanUp;
+
     alarmed = false;
     while(tries < LLayer.settings->numAttempts) {
 
         if ( !LLayer.is_receiver ) {
-            frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize,IS_FRAMESUHEAD);
-            if ( frameToSend == NULL ) goto cleanUp;
-            write(LLayer.serialFileDescriptor, frameToSend, 5);
+            write(LLayer.serialFileDescriptor, frameToSend, frameSize);
             alarm(3);
         } else first = true;
+
+        state = 0;
 
         noEscYet = true;
         while(!alarmed) {
@@ -216,15 +198,11 @@ int llopen(void) {
                         state = 0;
                     break;
                 case 5:
-                    if ( LLayer.is_receiver ) {
-                        frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize, IS_FRAMESUHEAD);
-                        if ( frameToSend == NULL ) goto cleanUp;
-                        write(LLayer.serialFileDescriptor,frameToSend,SIZE_OF_FRAMESU);
-                    }
+                    if ( LLayer.is_receiver ) write(LLayer.serialFileDescriptor,frameToSend,frameSize);
                     free(frameToSend);
                     return 0;
                 default:
-                    return -1;
+                    goto cleanUp;
             }
         }
         alarmed = false;
@@ -315,22 +293,122 @@ int llread(uint8_t *packet) {
 
 int llclose(void) {
 
+    bool noEscYet;
+    unsigned int tries = 0;
+    uint8_t partOfFrame, state;
+    uint8_t *frameToSendDisc;
+    uint8_t *frameToSendUA;
+    uint16_t frameSizeDisc, frameSizeUA;
+    uint8_t storeReceivedA, storeReceivedC;
+
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize and llopen first\n");
         return -1;
     }
 
-    // SEND LeftOverFrame if there is one
+    if ( !LLayer.is_receiver ) {
+        // SEND LeftOverFrame if there is one
 
 
 
-    // END Connection in a proper way
+        // END Connection in a proper way
+        signal(SIGALRM, alarm_handler);
 
+        frameToSendDisc = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &frameSizeDisc, IS_FRAMESUHEAD);
+        if ( frameToSendDisc == NULL ) return -1;
 
+        frameToSendUA = buildFrameHeader(A_CRECEIVER_RSENDER, C_UA, &frameSizeUA, IS_FRAMESUHEAD);
+        if ( frameToSendUA == NULL ) {
+            free(frameToSendDisc);
+            return -1;
+        }
 
+        alarmed = false;
+        while(tries < LLayer.settings->numAttempts) {
+
+            write(LLayer.serialFileDescriptor, frameToSendDisc, frameSizeDisc);
+            state = 0;
+
+failedLastPhase:
+            alarm(3);
+            noEscYet = true;
+
+            while(!alarmed) {
+
+                read(LLayer.serialFileDescriptor, &partOfFrame, 1);
+
+                switch (state) {
+                    case 0:
+                        if (partOfFrame == F)
+                            state = 1;
+                        break;
+                    case 1:
+                        if (partOfFrame == A_CSENDER_RRECEIVER) {
+                            state = 2;
+                            storeReceivedA = partOfFrame;
+                        } else if (partOfFrame != F)
+                            state = 0;
+                        break;
+                    case 2:
+                        if ( partOfFrame == C_DISC ) {
+                            state = 3;
+                            storeReceivedC = partOfFrame;
+                        } else if (partOfFrame == F)
+                            state = 1;
+                        else
+                            state = 0;
+                        break;
+                    case 3:
+                        if ( (partOfFrame == ESC) && noEscYet) {
+                            state = 3;
+                            noEscYet = false;
+                        } else {
+                            if ( noEscYet && (partOfFrame == (storeReceivedA ^ storeReceivedC)))
+                                state = 4;
+                            else if ( !noEscYet && (partOfFrame == ((storeReceivedA ^ storeReceivedC) ^ STUFFING_XOR_BYTE)))
+                                state = 4;
+                            else if (partOfFrame == F)
+                                state = 1;
+                            else
+                                state = 0;
+                            noEscYet = true;
+                        }
+                        break;
+                    case 4:
+                        if (partOfFrame == F)
+                            state = 5;
+                        else
+                            state = 0;
+                        break;
+                    case 5:
+                        alarm(0);
+                        alarmed = false;
+                        write(LLayer.serialFileDescriptor,frameToSendUA,frameSizeUA);
+                        alarm(1);
+                        while(!alarmed) {
+                            if ( read(LLayer.serialFileDescriptor, &partOfFrame, 1) == 1 ) {
+                                alarmed = false;
+                                if ( partOfFrame == F ) state = 1;
+                                else state = 0;
+                                ++tries;
+                                goto failedLastPhase;
+                            }
+                        }
+                        goto SUCCESS;
+                    default:
+                        return -1;
+                }
+            }
+            alarmed = false;
+            ++tries;
+        }
+SUCCESS:
+        free(frameToSendDisc);
+        free(frameToSendUA);
+    }
     sleep(3);
-
     free(payloadsAndFooterLeftOver);
+    payloadsAndFooterLeftOver = NULL;
     leftOversSize = 0;
 
     if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio)) == -1 ) {

@@ -16,16 +16,15 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
-
     printf("NBundles: %lu\n", NBundles);
     for(i = 0; i < (int)NBundles; ++i) {
         if ( Bundles[i]->name != NULL)
-        	printf("Name: %s\n", Bundles[i]->name);
+            printf("Name: %s\n", Bundles[i]->name);
 
         printf("baudRate: %d\n", Bundles[i]->llSettings.baudRate);
 
         if ( Bundles[i]->llSettings.port != NULL )
-        	printf("port: %s\n", Bundles[i]->llSettings.port);
+            printf("port: %s\n", Bundles[i]->llSettings.port);
 
         printf("timeout: %d\n", Bundles[i]->llSettings.timeout);
         printf("numAttempts: %d\n", Bundles[i]->llSettings.numAttempts);
@@ -33,9 +32,8 @@ int main(int argc, char *argv[])
         printf("packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
     }
 
-
     if( initAppLayer(Bundles[0]) < 0)
-    	printf("Error: Initializing app layer\n");
+        printf("Error: Initializing app layer\n");
 
     wipeBundles();
     return 0;

@@ -12,3 +12,4 @@ typedef struct {
 } LinkLayerSettings;
 
 #endif
+
