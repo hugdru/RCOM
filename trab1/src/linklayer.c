@@ -38,6 +38,7 @@ typedef struct LinkLayer {
 
 void alarm_handler(int signo);
 uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
+uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
 int buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess);
 uint8_t generateBcc(const uint8_t *data, uint16_t size);
 uint8_t generate_crc8(const uint8_t *data, uint16_t size);
@@ -470,6 +471,51 @@ uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_Ifr
 
     *frameSize = size;
     return tempHeader;
+}
+
+uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize) {
+
+    uint8_t *stuffedIFrame, temp;
+    size_t framedTempSize;
+    size_t i, n, t;
+
+    if ( IFrameHeader == NULL || IFrameHeaderSize == 0 || UnstuffedIFrameBody == NULL || framedSize == NULL ) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    n = LLayer.settings->payloadSize;
+    framedTempSize = IFrameHeaderSize + n + 2 + n/4;
+
+    stuffedIFrame = (uint8_t *) malloc( sizeof(uint8_t) * framedTempSize );
+    if ( stuffedIFrame == NULL ) return NULL;
+
+    for( i = 0; i < IFrameHeaderSize; ++i) stuffedIFrame[i] = IFrameHeader[i];
+    t = 0;
+    while(n--) {
+        if ( framedTempSize - t <= 10 ) {
+            framedTempSize += 10;
+            stuffedIFrame = (uint8_t *) realloc(stuffedIFrame,framedTempSize);
+            if ( stuffedIFrame == NULL ) {
+                free(stuffedIFrame);
+                return NULL;
+            }
+        }
+        if ( UnstuffedIFrameBody[t] == ESC || UnstuffedIFrameBody[t] == F ) {
+            temp = UnstuffedIFrameBody[t];
+            stuffedIFrame[i] = ESC;
+            stuffedIFrame[++i] = temp ^ STUFFING_XOR_BYTE;
+        } else stuffedIFrame[i] = UnstuffedIFrameBody[t];
+        ++t;
+        ++i;
+    }
+
+    stuffedIFrame = (uint8_t *) realloc(stuffedIFrame,i);
+    if ( stuffedIFrame == NULL ) return NULL;
+
+    *framedSize = i;
+
+    return stuffedIFrame;
 }
 
 int buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, uint8_t **payloadsAndFooter, size_t *nPayloadsAndFootersToProcess) {
