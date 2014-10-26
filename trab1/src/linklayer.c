@@ -37,14 +37,18 @@ typedef struct LinkLayer {
 } LinkLayer;
 
 void alarm_handler(int signo);
-// Sender Functions
+
 uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
+
+// Sender
 uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess);
 uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
-// Receiver functions
+
+// Receiver
 uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *IFrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrame, bool is_IframeHead);
 uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t frameBodySize, uint8_t *UnstuffedIFrameBody);
-// General functions
+
+// General
 uint8_t generateBcc(const uint8_t *data, uint16_t size);
 uint8_t generate_crc8(const uint8_t *data, uint16_t size);
 
