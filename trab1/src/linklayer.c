@@ -140,7 +140,7 @@ int llopen(void) {
 
         if ( !LLayer.is_receiver ) {
             write(LLayer.serialFileDescriptor, frameToSend, frameSize);
-            alarm(3);
+            alarm(LLayer.settings->timeout);
         } else first = true;
 
         state = 0;
@@ -153,7 +153,7 @@ int llopen(void) {
                 case 0:
                     if (partOfFrame == F)
                         if ( LLayer.is_receiver && first ) {
-                            alarm(3);
+                            alarm(LLayer.settings->timeout);
                             first = false;
                         }
                         state = 1;
@@ -331,7 +331,7 @@ int llclose(void) {
             state = 0;
 
 failedLastPhase:
-            alarm(3);
+            alarm(LLayer.settings->timeout);
             noEscYet = true;
 
             while(!alarmed) {
