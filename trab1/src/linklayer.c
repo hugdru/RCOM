@@ -38,28 +38,30 @@ typedef struct LinkLayer {
 
 void alarm_handler(int signo);
 
-uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
+char* buildFrameHeader(char A, char C, uint16_t *frameSize, bool is_IframeHead);
 
 // Sender
-uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess);
-uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
+char** buildUnstuffedFramesBodies(char *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess);
+char* buildIFrame(char const *IFrameHeader, char IFrameHeaderSize, char const *UnstuffedIFrameBody, size_t *framedSize);
 
 // Receiver
-uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *IFrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrame, bool is_IframeHead);
-uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t frameBodySize, uint8_t *UnstuffedIFrameBody);
+char* unstuffReceivedFrameHeaderAndCheckBcc(char const *FrameHeader, char frameHeaderSize, char *unstuffedHeaderFrameSize, bool is_IframeHead);
+char* unstuffReceivedIFrameBodyAndCheckBcc(char const *IFrameBody, uint16_t IframeBodySize, char *UnstuffedIFrameBodySize);
 
 // General
-uint8_t generateBcc(const uint8_t *data, uint16_t size);
-uint8_t generate_crc8(const uint8_t *data, uint16_t size);
+char generateBcc(const char *data, uint16_t size);
+char generate_crc8(const char *data, uint16_t size);
 
 LinkLayer LLayer;
 
 // Tem de ser global por causa do llclose()
 size_t leftOversSize = 0;
-uint8_t *payloadsAndFootersLeftOver = NULL;
+char *payloadsAndFootersLeftOver = NULL;
 
 bool blocked = false;
 bool alarmed = false;
+
+uint16_t receiverState = 0;
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     if ( blocked ) {
@@ -74,7 +76,7 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 
     LLayer.settings = ptr;
 
-    payloadsAndFootersLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize );
+    payloadsAndFootersLeftOver = (char *) malloc( sizeof(char) * LLayer.settings->payloadSize );
     LLayer.is_receiver = is_receiver;
     payloadsAndFootersLeftOver = NULL;
 
@@ -86,10 +88,10 @@ int llopen(void) {
     bool first, noEscYet;
     unsigned int tries = 0;
     struct termios newtio;
-    uint8_t partOfFrame, state;
-    uint8_t *frameToSend;
+    char partOfFrame, state;
+    char *frameToSend;
     uint16_t frameSize;
-    uint8_t storeReceivedA, storeReceivedC;
+    char storeReceivedA, storeReceivedC;
 
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize first\n");
@@ -140,8 +142,10 @@ int llopen(void) {
     // New termios Structure set
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
-    if ( LLayer.is_receiver ) frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize, IS_FRAMESUHEAD);
-    else frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize, IS_FRAMESUHEAD);
+    if ( LLayer.is_receiver ) {
+        receiverState = 0;
+        frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize, IS_FRAMESUHEAD);
+    } else frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize, IS_FRAMESUHEAD);
     if ( frameToSend == NULL ) goto cleanUp;
 
     alarmed = false;
@@ -226,21 +230,21 @@ cleanUp:
     return -1;
 }
 
-int llwrite(uint8_t *packet, size_t packetSize) {
+int llwrite(char *packet, size_t packetSize) {
 
     size_t i;
     size_t nPayloadsAndFootersToProcess = 0;
-    uint8_t **payloadsAndFooters = NULL;
+    char **payloadsAndFooters = NULL;
 
     payloadsAndFooters = buildUnstuffedFramesBodies(packet,packetSize,&nPayloadsAndFootersToProcess);
     if ( errno != 0 ) return -1;
 
     // Construir as tramas de supervisão e não numeradas que vão ser precisas
-    /*uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);*/
+    /*char* buildFrameHeader(char A, char C, uint16_t *frameSize, bool is_IframeHead);*/
 
     // Depois vem a máquina de estados
         // Ir construindo as tramas completas de informação à medida que vão sendo precisas
-        // uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
+        // char* buildIFrame(char const *IFrameHeader, char IFrameHeaderSize, char const *UnstuffedIFrameBody, size_t *framedSize);
 
     // Limpar a tralha
     for ( i = 0; i < nPayloadsAndFootersToProcess; ++i) free(payloadsAndFooters[i]);
@@ -249,20 +253,32 @@ int llwrite(uint8_t *packet, size_t packetSize) {
     return 0;
 }
 
-int llread(uint8_t *packet) {
+// retorna NULL && *error = -1,  em caso de erro
+// retorna NULL %% *error = 0, se receber disconnect e depois um UA para a applayer depois fazer llclose
+char* llread(uint16_t *packetSize, int *error) {
 
-    return 0;
+    if ( packetSize == NULL || error == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    // Usar a variável receiverState para o estado ficar guardado entre chamadas, pq é global
+    // Fazer unstuffing e cacular BCC
+    // Se receber uma trama de informação válida, preenche o tamanho *packetSize, retorna o endereço do pacote (tem de estar unstuffed!)
+
+    *error = -1;
+    return NULL;
 }
 
 int llclose(void) {
 
     bool noEscYet;
     unsigned int tries = 0;
-    uint8_t partOfFrame, state;
-    uint8_t *frameToSendDisc;
-    uint8_t *frameToSendUA;
+    char partOfFrame, state;
+    char *frameToSendDisc;
+    char *frameToSendUA;
     uint16_t frameSizeDisc, frameSizeUA;
-    uint8_t storeReceivedA, storeReceivedC;
+    char storeReceivedA, storeReceivedC;
 
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize and llopen first\n");
@@ -388,17 +404,17 @@ void alarm_handler(int signo) {
     alarmed = true;
 }
 
-uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead) {
-    uint8_t *tempHeader;
-    uint8_t temp;
-    uint8_t size = 6;
+char* buildFrameHeader(char A, char C, uint16_t *frameSize, bool is_IframeHead) {
+    char *tempHeader;
+    char temp;
+    unsigned char size = 6;
 
     if ( frameSize == NULL ) {
         errno = EINVAL;
         return NULL;
     }
 
-    tempHeader = (uint8_t *) malloc( sizeof(uint8_t) * size);
+    tempHeader = (char *) malloc( sizeof(char) * size);
     if ( tempHeader == NULL ) return NULL;
     tempHeader[0] = F;
     tempHeader[1] = A;
@@ -412,18 +428,18 @@ uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_Ifr
         temp = 5;
     } else temp = 4;
 
-    if ( temp == 5 && is_IframeHead ) tempHeader = (uint8_t *) realloc(tempHeader,--size);
+    if ( temp == 5 && is_IframeHead ) tempHeader = (char *) realloc(tempHeader,--size);
     else if ( temp == 4 && is_IframeHead) {
         size -= 2;
-        tempHeader = (uint8_t *) realloc(tempHeader,size);
+        tempHeader = (char *) realloc(tempHeader,size);
         if ( tempHeader == NULL ) {
             free(tempHeader);
             return NULL;
         }
     } else if ( !is_IframeHead ) {
-        tempHeader[temp] = F;
+        tempHeader[(unsigned char)temp] = F;
         if ( temp == 4 ) {
-            tempHeader = (uint8_t *) realloc(tempHeader,--size);
+            tempHeader = (char *) realloc(tempHeader,--size);
             if ( tempHeader == NULL ) {
                 free(tempHeader);
                 return NULL;
@@ -435,10 +451,10 @@ uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_Ifr
     return tempHeader;
 }
 
-uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess) {
+char** buildUnstuffedFramesBodies(char *packet, size_t nBytes, size_t *nPayloadsAndFootersToProcess) {
 
-    uint8_t xorMe;
-    uint8_t **payloadsAndFooters = NULL;
+    char xorMe;
+    char **payloadsAndFooters = NULL;
     size_t i, t;
     size_t temp;
     size_t nCompletePayloadsAndFooters;
@@ -449,10 +465,10 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t 
     if ( packet == NULL || nPayloadsAndFootersToProcess == NULL ) return NULL;
 
     if ( leftOversSize != 0 ) {
-        if ( packetSize >= (LLayer.settings->payloadSize - leftOversSize) ) {
-            payloadsAndFooters = (uint8_t **) malloc( sizeof(uint8_t *) * 1);
+        if ( nBytes >= (LLayer.settings->payloadSize - leftOversSize) ) {
+            payloadsAndFooters = (char **) malloc( sizeof(char *) * 1);
             if ( payloadsAndFooters == NULL ) return NULL;
-            payloadsAndFooters[0] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
+            payloadsAndFooters[0] = (char *) malloc( sizeof(char) * LLayer.settings->payloadSize + 2 );
             if ( payloadsAndFooters[0] == NULL ) {
                 free(payloadsAndFooters);
                 return NULL;
@@ -461,7 +477,7 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t 
             for ( i = 0; i < leftOversSize; ++i) {
                 payloadsAndFooters[0][i] = payloadsAndFootersLeftOver[i];
             }
-        } else fillUntil = packetSize;
+        } else fillUntil = nBytes;
 
         xorMe = 0x00;
         for ( i = leftOversSize; i < fillUntil; ++i) {
@@ -472,7 +488,7 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t 
                 xorMe ^= *packet;
             }
             ++packet;
-            --packetSize;
+            --nBytes;
         }
         if ( i == LLayer.settings->payloadSize ) {
             payloadsAndFooters[0][i++] = xorMe;
@@ -486,21 +502,21 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t 
         }
     }
 
-    nCompletePayloadsAndFooters = packetSize / LLayer.settings->payloadSize;
+    nCompletePayloadsAndFooters = nBytes / LLayer.settings->payloadSize;
     temp = *nPayloadsAndFootersToProcess + nCompletePayloadsAndFooters;
-    payloadsAndFooters = (uint8_t **) realloc(payloadsAndFooters, temp);
+    payloadsAndFooters = (char **) realloc(payloadsAndFooters, temp);
     if ( payloadsAndFooters == NULL ) {
         free(*payloadsAndFooters);
         free(payloadsAndFooters);
         return NULL;
     }
     for( i = *nPayloadsAndFootersToProcess; i < temp; ++i) {
-        payloadsAndFooters[i] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
+        payloadsAndFooters[i] = (char *) malloc( sizeof(char) * LLayer.settings->payloadSize + 2 );
         xorMe = 0x00;
         for ( t = 0; t < LLayer.settings->payloadSize; ++t) {
             payloadsAndFooters[i][t] = *packet;
             xorMe ^= *packet;
-            --packetSize;
+            --nBytes;
             ++packet;
         }
         payloadsAndFooters[i][t++] = xorMe;
@@ -508,7 +524,7 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t 
     }
     *nPayloadsAndFootersToProcess = i;
 
-    while(packetSize--) {
+    while(nBytes--) {
         *payloadsAndFootersLeftOver = *packet;
         ++packet;
         ++leftOversSize;
@@ -518,9 +534,9 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t 
     return payloadsAndFooters;
 }
 
-uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize) {
+char* buildIFrame(char const *IFrameHeader, char IFrameHeaderSize, char const *UnstuffedIFrameBody, size_t *framedSize) {
 
-    uint8_t *stuffedIFrame, temp;
+    char *stuffedIFrame, temp;
     size_t framedTempSize;
     size_t i, n, t;
 
@@ -532,7 +548,7 @@ uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint
     n = LLayer.settings->payloadSize;
     framedTempSize = IFrameHeaderSize + n + 2 + n/4;
 
-    stuffedIFrame = (uint8_t *) malloc( sizeof(uint8_t) * framedTempSize );
+    stuffedIFrame = (char *) malloc( sizeof(char) * framedTempSize );
     if ( stuffedIFrame == NULL ) return NULL;
 
     for( i = 0; i < IFrameHeaderSize; ++i) stuffedIFrame[i] = IFrameHeader[i];
@@ -540,7 +556,7 @@ uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint
     while(n--) {
         if ( framedTempSize - t <= 10 ) {
             framedTempSize += 10;
-            stuffedIFrame = (uint8_t *) realloc(stuffedIFrame,framedTempSize);
+            stuffedIFrame = (char *) realloc(stuffedIFrame,framedTempSize);
             if ( stuffedIFrame == NULL ) {
                 free(stuffedIFrame);
                 return NULL;
@@ -555,7 +571,7 @@ uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint
         ++i;
     }
 
-    stuffedIFrame = (uint8_t *) realloc(stuffedIFrame,i);
+    stuffedIFrame = (char *) realloc(stuffedIFrame,i);
     if ( stuffedIFrame == NULL ) return NULL;
 
     *framedSize = i;
@@ -563,18 +579,20 @@ uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint
     return stuffedIFrame;
 }
 
-uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *IFrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrame, bool is_IframeHead) {
+char* unstuffReceivedFrameHeaderAndCheckBcc(char const *FrameHeader, char frameHeaderSize, char *unstuffedHeaderFrameSize, bool is_IframeHead) {
 
+    return NULL;
 }
 
-uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t frameBodySize, uint8_t *UnstuffedIFrameBody) {
+char* unstuffReceivedIFrameBodyAndCheckBcc(char const *IFrameBody, uint16_t IframeBodySize, char *UnstuffedIFrameBodySize) {
 
+    return NULL;
 }
 
-uint8_t generateBcc(const uint8_t *data, uint16_t size) {
+char generateBcc(const char *data, uint16_t size) {
 
     size_t i;
-    uint8_t bcc = 0x00;
+    char bcc = 0x00;
 
     if ( data == NULL ) {
         errno = EINVAL;
@@ -588,10 +606,10 @@ uint8_t generateBcc(const uint8_t *data, uint16_t size) {
     return bcc;
 }
 
-uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
+char generate_crc8(const char *data, uint16_t size) {
 
-    uint8_t R = 0;
-    uint8_t bitsRead = 0;
+    char R = 0;
+    char bitsRead = 0;
 
     if ( data == NULL || size == 0 ) {
         errno = EINVAL;

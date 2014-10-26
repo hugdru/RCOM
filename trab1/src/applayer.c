@@ -32,41 +32,41 @@ AppLayer appLayer;
 
 /**
  * @desc Faz parser do pacote recebido
- * @arg uint8_t* packet: pacote recebido
+ * @arg char* packet: pacote recebido
  * @arg size_t size: número de bytes de packet
  * @rrturn Retorna 1 quando a mensagem foi toda lida, 0 se não
  */
-int parserPacket(uint8_t* packet, size_t size);
+int parserPacket(char* packet, size_t size);
 
 /**
  * @des Reads message/file from sender
  */
-void read();
+int read(void);
 
 /**
  * @desc Envia pacote de controlo do tipo START contendo o nome do ficheiro e tamanho
  * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
  */
-int writeStartPacket();
+int writeStartPacket(void);
 
 /**
  * @desc Envia pacote de controlo do tipo END contendo apenas o byte de controlo correspondendo a type end
  * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
  */
-int writeEndPacket();
+int writeEndPacket(void);
 
 /**
  * @des Envia pacote de controlo do tipo DATA com data recebida como argumento
- * @arg uint8_t *data: data a ser empacotada e enviada
+ * @arg char *data: data a ser empacotada e enviada
  * @arg size_t size: número de bytes de data
  * @return Retorna um número positivo em caso de sucesso e negatio em caso de erro
  */
-int writeDataPacket(uint8_t *data, size_t size);
+int writeDataPacket(char *data, size_t size);
 
 /**
  * @desc Sends message/file to the receiver
  */
-void write();
+void write(void);
 
 
 int initAppLayer(Bundle *bundle) {
@@ -108,15 +108,15 @@ int initAppLayer(Bundle *bundle) {
 	return 0;
 }
 
-int parserPacket(uint8_t* packet, size_t size) {
-	uint8_t C = packet[0];
+int parserPacket(char* packet, size_t size) {
+	char C = packet[0];
 
 	if(C == C_DATA) {
-		uint8_t L2 = packet[2];
-		uint8_t L1 = packet[3];
+		char L2 = packet[2];
+		char L1 = packet[3];
 		uint32_t dataSize = 256 * L2 + L1;
 
-		int i;
+		size_t i;
 		for(i = 0; i < dataSize; i++) {
 			if(appLayer.settings->status == STATUS_RECEIVER_FILE)
 				fprintf(appLayer.settings->io.fptr, "%c", packet[4+i]);
@@ -129,9 +129,9 @@ int parserPacket(uint8_t* packet, size_t size) {
 	else if(C == C_START) {
 		size_t i = 1;
 		while(i < size) {
-			uint8_t type = packet[i++];
-			uint8_t length = packet[i++];
-			uint8_t value[length];
+			char type = packet[i++];
+			size_t length = packet[i++];
+			char value[length];
 
 
 			strncpy (value, packet + i, length);
@@ -139,7 +139,7 @@ int parserPacket(uint8_t* packet, size_t size) {
 
 			switch(type) {
 				case TYPE_FILESIZE:
-					appLayer.fileInfo->fileSize = (int) value; // fileSize is in AppLayer
+					appLayer.fileInfo->fileSize = (unsigned int) value; // fileSize is in AppLayer
 					break;
 				case TYPE_FILENAME:
 					appLayer.fileInfo->fileName = value;
@@ -165,45 +165,51 @@ int parserPacket(uint8_t* packet, size_t size) {
 	return 0;
 }
 
-void read() {
-		uint8_t *packet;
-		size_t size;
-		int end = 0;
+int read(void) {
+		char *packet;
+		uint16_t packetSize;
+		int end = 0, error;
 
 		while(!end) {
-			size = llread(packet);
-			end = parserPacket(packet, size);
+			packet = llread(&packetSize, &error);
+            if ( errno != 0 ) return -1;
+            else if ( error == -1 && packet == NULL ) return -1;
+            else if ( error == 0 && packet == NULL ) {
+                // Disconnect received, will not receive more packets
+			    end = parserPacket(packet, packetSize);
+            }
 		}
+        return 0;
 }
 
-int writeStartPacket() {
-	uint8_t filenameLength = strlen(appLayer.fileInfo->fileName);
+int writeStartPacket(void) {
+	size_t filenameLength = strlen(appLayer.fileInfo->fileName);
 
-	uint8_t packetSize = filenameLength + 9; //1 byte do type, 2 para cada parametro para o TL e fileSizeLength e filenameLength
-	uint8_t packet[packetSize];
+	size_t packetSize = filenameLength + 9; //1 byte do type, 2 para cada parametro para o TL e fileSizeLength e filenameLength
+	char packet[packetSize];
 
-	sprintf(packet, "%02x:%02x:%d%d%02x:%02x:%s", C_START, TYPE_FILESIZE, (int) sizeof(int), appLayer.fileInfo->fileSize, TYPE_FILENAME, filenameLength, appLayer.fileInfo->fileName);
+	sprintf(packet, "%02x:%02x:%d%d%02x:%02zu:%s", C_START, TYPE_FILESIZE, (int) sizeof(int), appLayer.fileInfo->fileSize, TYPE_FILENAME, filenameLength, appLayer.fileInfo->fileName);
 
 	return llwrite(packet, packetSize);
 }
 
-int writeEndPacket() {
-	uint8_t packet = C_END;
+int writeEndPacket(void) {
+	char packet = C_END;
 
 	return llwrite(&packet, 1);
 }
 
-int writeDataPacket(uint8_t *data, size_t size) {
+int writeDataPacket(char *data, size_t size) {
 	char packet[appLayer.settings->packetBodySize + 4];
 
 	sprintf(packet,"%c%c%c%c%s", C_DATA, 1, size/256, size%256, data);
 	return llwrite(packet, strlen(packet));
 }
 
-void write() {
+void write(void) {
 	size_t res;
 	bool end = false;
-	uint8_t data[appLayer.settings->packetBodySize];
+	char data[appLayer.settings->packetBodySize];
 
 	writeStartPacket();
 
@@ -225,3 +231,4 @@ void write() {
 
 	writeEndPacket();
 }
+

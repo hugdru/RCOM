@@ -8,8 +8,8 @@
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver);
 int llopen(void);
-int llwrite(uint8_t *packet, size_t packetSize);
-int llread(uint8_t *packet);
+int llwrite(char *packet, size_t packetSize);
+char* llread(uint16_t *packetSize, int *error);
 int llclose(void);
 
 #endif
