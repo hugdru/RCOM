@@ -11,6 +11,5 @@
  */
 int initAppLayer(Bundle *bundle);
 
-
 #endif
 

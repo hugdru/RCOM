@@ -16,7 +16,7 @@
 #define DEFAULT_PAYLOAD_SIZE 100
 #define DEFAULT_PACKETBODY_SIZE 50
 
-unsigned long parse_ulong(char const * const str, int base); // From the function manual
+static unsigned long parse_ulong(char const * const str, int base); // From the function manual
 
 void print_usage(char **argv) {
 
@@ -25,24 +25,24 @@ void print_usage(char **argv) {
     if ( ptr == NULL ) ptr = argv[1];
     else ++ptr;
 
-    printf("\nSends or Receives data from a given serial port");
-    printf("\nUsage: %s [NTUNNELS] ([OPTIONS] MODE)*\n", ptr);
+    fprintf(stderr, "\nSends or Receives data from a given serial port");
+    fprintf(stderr, "\nUsage: %s [NTUNNELS] ([OPTIONS] MODE)*\n", ptr);
 
-    printf("\nNTUNNELS:");
-    printf("\n -N number\tNumber of Bundles to create, defaults to 1\n");
-    printf("\n +\t\tTunnel (OPTIONS MODE) seperator\n");
+    fprintf(stderr, "\nNTUNNELS:");
+    fprintf(stderr, "\n -N number\tNumber of Bundles to create, defaults to 1\n");
+    fprintf(stderr, "\n +\t\tTunnel (OPTIONS MODE) seperator\n");
 
-    printf("\nOptions:\n");
-    printf(" -b  Number\tChange baudRate to a certain value, defaults to 38400\n");
-    printf(" -d  Path\tSet the serial port device file, defaults to /dev/ttyS0\n");
-    printf(" -t  Number\tSeconds to timeout, defaults to 3 seconds\n");
-    printf(" -r  Number\tNumber of retries before aborting connection, defaults to 3\n");
-    printf(" -n  String\tName you wish to assign to this connection\n");
-    printf(" -f  Number\tTamanho máximo do payload das tramas I (sem stuffing)\n");
-    printf(" -s  Number\tTamanho máximo da parte do pacote(body) que contém a informação útil\n");
+    fprintf(stderr, "\nOptions:\n");
+    fprintf(stderr, " -b  Number\tChange baudRate to a certain value, defaults to 38400\n");
+    fprintf(stderr, " -d  Path\tSet the serial port device file, defaults to /dev/ttyS0\n");
+    fprintf(stderr, " -t  Number\tSeconds to timeout, defaults to 3 seconds\n");
+    fprintf(stderr, " -r  Number\tNumber of retries before aborting connection, defaults to 3\n");
+    fprintf(stderr, " -n  String\tName you wish to assign to this connection\n");
+    fprintf(stderr, " -f  Number\tTamanho máximo do payload das tramas I (sem stuffing)\n");
+    fprintf(stderr, " -s  Number\tTamanho máximo da parte do pacote(body) que contém a informação útil\n");
 
-    printf("\nMODE");
-    printf("\n Sender:\n");
+    fprintf(stderr, "\nMODE");
+    fprintf(stderr, "\n Sender:\n");
     printf("     -x \t\tInformation to send is read from stdin be it a pipe or redirection\n");
     printf("     < PathToFile\tSends a file must be used along with option -\n");
     printf("     -m Message\t\tSends a message\n");
@@ -60,7 +60,8 @@ void print_usage(char **argv) {
 
 Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
 
-    int c, retn;
+    /*int c, retn;*/
+    int c;
     unsigned int checkNDuplication = 0;
     bool ioSet;
     long int subArgc;
@@ -68,7 +69,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
     size_t numberOfSeparators = 0;
     size_t i;
     unsigned long parsedNumber;
-    regex_t deviceRegex;
+    /*regex_t deviceRegex;*/
     Bundle **Bundles;
 
     *NBundles = 1;
@@ -108,11 +109,11 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
         Bundles[i]->name = NULL;
     }
 
-    retn = regcomp(&deviceRegex,"/dev/ttyS[0-9][0-9]*",0);
-    if(retn) {
-        fprintf(stderr, "Could not compile regex\n");
-        return NULL;
-    }
+    /*retn = regcomp(&deviceRegex,"/dev/ttyS[0-9][0-9]*",0);*/
+    /*if(retn) {*/
+        /*fprintf(stderr, "Could not compile regex\n");*/
+        /*return NULL;*/
+    /*}*/
     // Parse stuff for each Tunnel
     subArgv = argv;
     subArgc = argc;
@@ -163,12 +164,12 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                     break;
                 case 'd':
                     /* Regex testing */
-                    retn = regexec(&deviceRegex, optarg, 0, NULL, 0);
-                    if ( retn == REG_NOMATCH || retn != 0 ) {
-                        fprintf(stderr, "Not a proper device file, expected /dev/ttyS[0-9]+");
-                        errno = EINVAL;
-                        return NULL;
-                    }
+                    /*retn = regexec(&deviceRegex, optarg, 0, NULL, 0);*/
+                    /*if ( retn == REG_NOMATCH || retn != 0 ) {*/
+                        /*fprintf(stderr, "Not a proper device file, expected /dev/ttyS[0-9]+");*/
+                        /*errno = EINVAL;*/
+                        /*return NULL;*/
+                    /*}*/
                     Bundles[i]->llSettings.port = optarg;
                     break;
                 case 't':
@@ -220,7 +221,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
     return Bundles;
 }
 
-unsigned long parse_ulong(char const * const str, int base) {
+static unsigned long parse_ulong(char const * const str, int base) {
     char *endptr;
     unsigned long val;
 

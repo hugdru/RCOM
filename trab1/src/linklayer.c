@@ -36,21 +36,21 @@ typedef struct LinkLayer {
     LinkLayerSettings *settings;
 } LinkLayer;
 
-void alarm_handler(int signo);
+static void alarm_handler(int signo);
 
-uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
+static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
 
 // Sender
-uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess);
-uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
+static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess);
+static uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
 
 // Receiver
-uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *FrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrameSize, bool is_IframeHead);
-uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t IFrameBodySize, uint8_t *UnstuffedIFrameBodySize);
+static uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *FrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrameSize, bool is_IframeHead);
+static uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t IFrameBodySize, uint8_t *UnstuffedIFrameBodySize);
 
 // General
-uint8_t generateBcc(const uint8_t *data, uint16_t size);
-uint8_t generate_crc8(const uint8_t *data, uint16_t size);
+static uint8_t generateBcc(const uint8_t *data, uint16_t size);
+static uint8_t generate_crc8(const uint8_t *data, uint16_t size);
 
 LinkLayer LLayer;
 
@@ -401,11 +401,11 @@ SUCCESS:
     return 0;
 }
 
-void alarm_handler(int signo) {
+static void alarm_handler(int signo) {
     alarmed = true;
 }
 
-uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead) {
+static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead) {
     uint8_t *tempHeader;
     uint8_t temp;
     uint8_t size = 6;
@@ -452,7 +452,7 @@ uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_Ifr
     return tempHeader;
 }
 
-uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size_t *nPayloadsAndFootersToProcess) {
+static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size_t *nPayloadsAndFootersToProcess) {
 
     uint8_t xorMe;
     uint8_t **payloadsAndFooters = NULL;
@@ -535,7 +535,7 @@ uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size_t *nPa
     return payloadsAndFooters;
 }
 
-uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize) {
+static uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize) {
 
     uint8_t *stuffedIFrame, temp;
     size_t framedTempSize;
@@ -580,12 +580,12 @@ uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint
     return stuffedIFrame;
 }
 
-uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *FrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrameSize, bool is_IframeHead) {
+static uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *FrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrameSize, bool is_IframeHead) {
 
     return NULL;
 }
 
-uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t IFrameBodySize, uint8_t *UnstuffedIFrameBodySize) {
+static uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t IFrameBodySize, uint8_t *UnstuffedIFrameBodySize) {
 
     uint16_t lastPart;
     uint8_t xorMe;
@@ -631,7 +631,7 @@ wipeThis:
     return NULL;
 }
 
-uint8_t generateBcc(const uint8_t *data, uint16_t size) {
+static uint8_t generateBcc(const uint8_t *data, uint16_t size) {
 
     size_t i;
     uint8_t bcc = 0x00;
@@ -648,7 +648,7 @@ uint8_t generateBcc(const uint8_t *data, uint16_t size) {
     return bcc;
 }
 
-uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
+static uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
 
     uint8_t R = 0;
     uint8_t bitsRead = 0;

@@ -1,6 +1,12 @@
 #include "parser.h"
 #include "applayer.h"
 
+// TESTING INCLUDES
+#include "linklayer.h"
+
+#define IS_RECEIVER(n) (!((n)>>4))
+#define IS_TRANSMITTER(n) ((n)>>4)
+
 void wipeBundles(void);
 
 Bundle **Bundles= NULL;
@@ -13,7 +19,7 @@ int main(int argc, char *argv[])
     Bundles = parse_args(argc, argv, &NBundles);
     if ( Bundles == NULL) {
         print_usage(argv);
-        goto cleanup;
+        goto cleanUp;
     }
 
     printf("NBundles: %lu\n", NBundles);
@@ -32,13 +38,15 @@ int main(int argc, char *argv[])
         printf("packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
     }
 
-    if( initAppLayer(Bundles[0]) < 0)
-        printf("Error: Initializing app layer\n");
+    llinitialize(&Bundles[0]->llSettings,IS_RECEIVER(Bundles[0]->alSettings.status));
+    if ( llopen() != 0 ) goto cleanUp;
+    llclose();
 
-    wipeBundles();
+    /*if( initAppLayer(Bundles[0]) < 0)*/
+        /*printf("Error: Initializing app layer\n");*/
     return 0;
 
-cleanup:
+cleanUp:
     wipeBundles();
     fprintf(stderr, "There was an error, report it to devs\n");
     return -1;

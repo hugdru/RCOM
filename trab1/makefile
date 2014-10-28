@@ -2,42 +2,30 @@
 
 SRC = $(wildcard src/*.c)
 
-OBJ = $(patsubst src%, ../buildtemp%.o, $(SRC))
+OBJ = $(patsubst src/%.c, ../buildtemp/%.o, $(SRC))
 
 OUT = bin/serius
 
-# include directories
-INCLUDES = -I. -I./include/ -I./src -I/usr/include
-
 # compiler
-CCC = gcc -march=native -pipe
+CC = gcc
 
-# library paths
-LIBS = -Llib -L/usr/lib
-
-
-# compile flags
-LDFLAGS = -g
-
-.SUFFIXES: .cpp
+.SUFFIXES: .c
 
 all: default
-default: CCFLAGS = -std=c11 -O3
+default: CFLAGS = -std=c11 -O2 -march=native -pipe
 default: $(OUT)
 
-# not valid for c++ -Wconversion-extra -Wnested-externs -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes
-# -Wpadded
-debug: CCFLAGS = -std=c11 -ggdb -Wall -Wextra -pedantic -Wdouble-promotion -Wshadow -Wfloat-equal -Wcast-align -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wlogical-op -Wmissing-declarations -Wredundant-decls -Wdisabled-optimization -Wstack-protector -Winline -Wswitch-default -Wswitch-enum -Wnested-externs -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes -Wpadded
+debug: CFLAGS = -std=c11 -ggdb -g3 -Wall -Wextra -pedantic -Wdouble-promotion -Wshadow -Wfloat-equal -Wcast-align -Wcast-qual -Wwrite-strings -Wconversion -Wsign-conversion -Wlogical-op -Wmissing-declarations -Wredundant-decls -Wdisabled-optimization -Wstack-protector -Winline -Wswitch-default -Wswitch-enum -Wnested-externs -Wstrict-prototypes -Wold-style-definition -Wmissing-prototypes -Wpadded
 
 debug: $(OUT)
 
-../buildtemp/%.o: src/%
+../buildtemp/%.o: src/%.c
 	mkdir -p ../buildtemp
-	$(CCC) $(INCLUDES) $(CCFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OUT): $(OBJ)
 	mkdir -p bin
-	$(CCC) $(INCLUDES) $(CCFLAGS) $(OBJ) $(LIBS) -o $(OUT)
+	$(CC) $(CFLAGS) $(OBJ) -o $(OUT)
 
 clean:
 	rm -f $(OBJ) $(OUT)
