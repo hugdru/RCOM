@@ -13,10 +13,12 @@
 typedef struct {
     int status;
     size_t packetBodySize;
+
     union Io {
-        char *chptr;
-        FILE *fptr;
+        char * chptr;
+        FILE * fptr;
     } io;
+
 } AppLayerSettings;
 
 #endif

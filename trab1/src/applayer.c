@@ -18,13 +18,12 @@
 
 typedef struct {
     long int fileSize;
-    char * fileName;
+    unsigned char * fileName;
 } FileInfo;
 
 typedef struct {
-    int fileDescriptor;
-    FileInfo *fileInfo;
-    AppLayerSettings *settings;
+    FileInfo * fileInfo;
+    AppLayerSettings * settings;
 } AppLayer;
 
 AppLayer appLayer;
@@ -138,7 +137,7 @@ static int parserPacket(uint8_t* packet, size_t size) {
 
             switch(type) {
                 case TYPE_FILESIZE:
-                    appLayer.fileInfo->fileSize = value; // fileSize is in AppLayer
+                    appLayer.fileInfo->fileSize = (int) value; // fileSize is in AppLayer
                     break;
                 case TYPE_FILENAME:
                     appLayer.fileInfo->fileName = value;
@@ -194,7 +193,7 @@ static int writeStartPacket(void) {
     size_t packetSize = filenameLength + 9; //1 byte do type, 2 para cada parametro para o TL e fileSizeLength e filenameLength
     uint8_t packet[packetSize];
 
-    sprintf(packet, "%02x:%02x:%d%d%02x:%02zu:%s", C_START, TYPE_FILESIZE, (int) sizeof(int), appLayer.fileInfo->fileSize, TYPE_FILENAME, filenameLength, appLayer.fileInfo->fileName);
+    //sprintf(packet, "%02x:%02x:%d%d%02x:%02zu:%s", C_START, TYPE_FILESIZE, (int) sizeof(int), appLayer.fileInfo->fileSize, TYPE_FILENAME, filenameLength, appLayer.fileInfo->fileName);
 
     return llwrite(packet, packetSize);
 }
@@ -208,7 +207,7 @@ static int writeEndPacket(void) {
 static int writeDataPacket(uint8_t *data, size_t size) {
     uint8_t packet[appLayer.settings->packetBodySize + 4];
 
-    sprintf(packet,"%c%c%c%c%s", C_DATA, 1, size/256, size%256, data);
+    //sprintf(packet,"%c%c%c%c%s", C_DATA, 1, size/256, size%256, data);
     return llwrite(packet, strlen(packet));
 }
 

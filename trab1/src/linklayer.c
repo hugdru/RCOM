@@ -6,12 +6,17 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 #include <strings.h>
 #include <stdio.h>
 #include <termios.h>
 #include <stdlib.h>
 
-#define F 0x7e
+/**
+ * Defines
+ */
+
+#define F 0x7E
 #define A_CSENDER_RRECEIVER 0x03
 #define A_CRECEIVER_RSENDER 0x01
 #define C_SET 0x03
@@ -19,14 +24,9 @@
 #define C_DISC 0x11
 #define C_RR_RAW 0x05
 #define C_REJ_RAW 0x01
-
-#define ESC 0x7d
+#define ESC 0x7D
 #define STUFFING_XOR_BYTE 0x20
 
-#define CRC_8 0x9b
-
-#define IS_IFRAMEHEAD true
-#define IS_FRAMESUHEAD false
 
 typedef struct LinkLayer {
     bool is_receiver;
@@ -36,32 +36,33 @@ typedef struct LinkLayer {
     LinkLayerSettings *settings;
 } LinkLayer;
 
+
+/**
+ * Function Prototypes
+ */
+
 static void alarm_handler(int signo);
+static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t * headerSize, bool is_IframeHead);
+static uint8_t * buildIFrame(uint8_t * packet, size_t packetSize, size_t * stuffedFrameSize);
+static uint8_t generateBcc(const uint8_t * data, size_t size);
+static int stateMachine(uint8_t *packet, size_t packetSize);
+static void print_frame(uint8_t * frame, size_t size);
+static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize);
 
-static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);
 
-// Sender
-static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess);
-static uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
-
-// Receiver
-static uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *FrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrameSize, bool is_IframeHead);
-static uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t IFrameBodySize, uint8_t *UnstuffedIFrameBodySize);
-
-// General
-static uint8_t generateBcc(const uint8_t *data, uint16_t size);
-static uint8_t generate_crc8(const uint8_t *data, uint16_t size);
-
-LinkLayer LLayer;
-
-// Tem de ser global por causa do llclose()
-size_t leftOversSize = 0;
-uint8_t *payloadsAndFootersLeftOver = NULL;
+/**
+ * Global Variables
+ */
 
 bool blocked = false;
 bool alarmed = false;
+uint8_t receiverState = 0;
+LinkLayer linkLayer;
 
-uint16_t receiverState = 0;
+
+/**
+ * LinkLayer API
+ */
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     if ( blocked ) {
@@ -74,24 +75,16 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
         return -1;
     }
 
-    LLayer.settings = ptr;
-
-    payloadsAndFootersLeftOver = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize );
-    LLayer.is_receiver = is_receiver;
-    payloadsAndFootersLeftOver = NULL;
+    linkLayer.settings = ptr;
+    linkLayer.is_receiver = is_receiver;
 
     blocked = true;
     return 0;
 }
 
 int llopen(void) {
-    bool first, noEscYet;
     unsigned int tries = 0;
     struct termios newtio;
-    uint8_t partOfFrame, state;
-    uint8_t *frameToSend;
-    uint16_t frameSize;
-    uint8_t storeReceivedA, storeReceivedC;
 
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize first\n");
@@ -102,150 +95,85 @@ int llopen(void) {
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
   */
+    linkLayer.serialFileDescriptor = open(linkLayer.settings->port, O_RDWR | O_NOCTTY);
 
-    LLayer.serialFileDescriptor = open(LLayer.settings->port, O_RDWR | O_NOCTTY);
-    if ( LLayer.serialFileDescriptor == -1 ) {
-        perror(LLayer.settings->port);
+    if ( linkLayer.serialFileDescriptor < 0 ) {
+        perror(linkLayer.settings->port);
         return -1;
     }
 
-    if ( tcgetattr(LLayer.serialFileDescriptor,&(LLayer.oldtio)) == -1 ) { /* save current port settings */
+    if ( tcgetattr(linkLayer.serialFileDescriptor,&(linkLayer.oldtio)) < 0 ) { /* save current port settings */
         perror("tcgetattr");
-        close(LLayer.serialFileDescriptor);
+        close(linkLayer.serialFileDescriptor);
         return -1;
     }
 
     bzero(&newtio, sizeof(newtio));
-    newtio.c_cflag = LLayer.settings->baudRate | CS8 | CLOCAL | CREAD;
+    newtio.c_cflag = linkLayer.settings->baudRate | CS8 | CLOCAL | CREAD;
     newtio.c_iflag = IGNPAR;
     newtio.c_oflag = 0;
 
     /* set input mode (non-canonical, no echo,...) */
     newtio.c_lflag = 0;
-
-    newtio.c_cc[VTIME]    = 1;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
+    newtio.c_cc[VTIME] = 1;   /* inter-character timer unused */
+    newtio.c_cc[VMIN] = 0;   /* blocking read until 0 chars received */
 
   /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
     leitura do(s) próximo(s) caracter(es)
   */
+    tcflush(linkLayer.serialFileDescriptor, TCIOFLUSH);
 
-    tcflush(LLayer.serialFileDescriptor, TCIOFLUSH);
-
-    if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {
+    if ( tcsetattr(linkLayer.serialFileDescriptor,TCSANOW,&newtio) == -1) {
         perror("Failed to set new settings for port, tcsetattr");
-        close(LLayer.serialFileDescriptor);
+        close(linkLayer.serialFileDescriptor);
         return -1;
     }
 
-    // New termios Structure set
+    printf("New termios structure set\n");
+
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
-    if ( LLayer.is_receiver ) {
-        receiverState = 0;
-        frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &frameSize, IS_FRAMESUHEAD);
-    } else frameToSend = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &frameSize, IS_FRAMESUHEAD);
-    if ( frameToSend == NULL ) goto cleanUp;
+    int received = 0, res;
 
-    alarmed = false;
-    while(tries < LLayer.settings->numAttempts) {
+    size_t SETsize, UAsize;
+    uint8_t * SET = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &SETsize, false);
+    uint8_t * UA =  buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &UAsize, false);
 
-        if ( !LLayer.is_receiver ) {
-            write(LLayer.serialFileDescriptor, frameToSend, frameSize);
-            alarm(LLayer.settings->timeout);
-        } else first = true;
 
-        state = 0;
+    while(tries < linkLayer.settings->numAttempts) {
+    		alarmed = false;
+           	if ( linkLayer.is_receiver ) {
+    			alarm(3);
+    			received = stateMachine(SET, SETsize);
+    			printf("received: %d\n", received);
+    			if(received)
+    				res = write(linkLayer.serialFileDescriptor, UA, UAsize); // o que fazer com res?
+          	}
+    		else {
+    			res = write(linkLayer.serialFileDescriptor, SET, SETsize); // o que fazer com res?
+    		    alarm(3);
+    		   	received = stateMachine(UA, SETsize);
+    			printf("received: %d\n", received);
+    		}
 
-        noEscYet = true;
-        while(!alarmed) {
-            read(LLayer.serialFileDescriptor, &partOfFrame, 1);
+           	if(received)
+            	return 0;
 
-            switch (state) {
-                case 0:
-                    if (partOfFrame == F) {
-                        if ( LLayer.is_receiver && first ) {
-                            alarm(LLayer.settings->timeout);
-                            first = false;
-                        }
-                        state = 1;
-                    }
-                    fprintf(stderr, "state: %d\n", state);
-                    break;
-                case 1:
-                    if (partOfFrame == A_CSENDER_RRECEIVER) {
-                        state = 2;
-                        storeReceivedA = partOfFrame;
-                    } else if (partOfFrame != F)
-                        state = 0;
-                    fprintf(stderr, "state: %d\n", state);
-                    break;
-                case 2:
-                    if ( ((partOfFrame == C_SET) && LLayer.is_receiver) ||
-                         ((partOfFrame == C_UA)  && !LLayer.is_receiver)
-                       ) {
-                        state = 3;
-                        storeReceivedC = partOfFrame;
-                    } else if (partOfFrame == F)
-                        state = 1;
-                    else
-                        state = 0;
-                    fprintf(stderr, "state: %d\n", state);
-                    break;
-                case 3:
-                    if ( (partOfFrame == ESC) && noEscYet) {
-                        state = 3;
-                        noEscYet = false;
-                    } else {
-                        if ( noEscYet && (partOfFrame == (storeReceivedA ^ storeReceivedC)))
-                            state = 4;
-                        else if ( !noEscYet && (partOfFrame == ((storeReceivedA ^ storeReceivedC) ^ STUFFING_XOR_BYTE)))
-                            state = 4;
-                        else if (partOfFrame == F)
-                            state = 1;
-                        else
-                            state = 0;
-                        noEscYet = true;
-                    }
-                    fprintf(stderr, "state: %d\n", state);
-                    break;
-                case 4:
-                    if (partOfFrame == F)
-                        state = 5;
-                    else
-                        state = 0;
-                    fprintf(stderr, "state: %d\n", state);
-                    break;
-                case 5:
-                    if ( LLayer.is_receiver ) write(LLayer.serialFileDescriptor,frameToSend,frameSize);
-                    free(frameToSend);
-                    return 0;
-                    break;
-                default:
-                    goto cleanUp;
-            }
-        }
-        alarmed = false;
-        tries++;
+    		tries++;
     }
-    errno = ECONNABORTED;
-cleanUp:
-    free(frameToSend);
-    tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio));
-    close(LLayer.serialFileDescriptor);
+
+    //Failed
+    if ( tcsetattr(linkLayer.serialFileDescriptor,TCSANOW,&(linkLayer.oldtio)) < 0) { /* Restores old port settings */
+    	perror("tcsetattr");
+    	exit(1);
+    }
+
+    close(linkLayer.serialFileDescriptor);
     return -1;
 }
 
 int llwrite(uint8_t *packet, size_t packetSize) {
-
-    size_t i;
-    size_t nPayloadsAndFootersToProcess = 0;
-    uint8_t **payloadsAndFooters = NULL;
-
-    payloadsAndFooters = buildUnstuffedFramesBodies(packet,packetSize,&nPayloadsAndFootersToProcess);
-    if ( errno != 0 ) return -1;
-
     // Construir as tramas de supervisão e não numeradas que vão ser precisas
     /*uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);*/
 
@@ -253,23 +181,13 @@ int llwrite(uint8_t *packet, size_t packetSize) {
         // Ir construindo as tramas completas de informação à medida que vão sendo precisas
         // uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
 
-    // Limpar a tralha
-    for ( i = 0; i < nPayloadsAndFootersToProcess; ++i) free(payloadsAndFooters[i]);
-    free(payloadsAndFooters);
-
     return 0;
 }
 
 // errno != 0 em caso de erro
 // retorna NULL e errno = 0, se receber disconnect e depois um UA para a applayer depois fazer llclose
 // retorna endereço do pacote, *packetSize tamanho do pacote recebido
-uint8_t* llread(uint16_t *payloadSize) {
-
-    errno = 0;
-    if ( payloadSize == NULL ) {
-        errno = EINVAL;
-        return NULL;
-    }
+uint8_t* llread(size_t *payloadSize) {
 
     // Usar a variável receiverState para o estado ficar guardado entre chamadas, pq é global
     // Fazer unstuffing e cacular BCC
@@ -279,372 +197,176 @@ uint8_t* llread(uint16_t *payloadSize) {
 }
 
 int llclose(void) {
-
-    bool noEscYet;
     unsigned int tries = 0;
-    uint8_t partOfFrame, state;
-    uint8_t *frameToSendDisc;
-    uint8_t *frameToSendUA;
-    uint16_t frameSizeDisc, frameSizeUA;
-    uint8_t storeReceivedA, storeReceivedC;
 
     if ( !blocked ) {
         fprintf(stderr, "You have to llinitialize and llopen first\n");
         return -1;
     }
 
-    if ( !LLayer.is_receiver ) {
-        // SEND LeftOverFrame if there is one
+    size_t DISCsize, UAsize;
+    uint8_t * DISC = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &DISCsize, false);
+    uint8_t * UA =  buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &UAsize, false);
 
+    int received = 0, res;
 
-
-        // END Connection in a proper way
-        signal(SIGALRM, alarm_handler);
-
-        frameToSendDisc = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &frameSizeDisc, IS_FRAMESUHEAD);
-        if ( frameToSendDisc == NULL ) return -1;
-
-        frameToSendUA = buildFrameHeader(A_CRECEIVER_RSENDER, C_UA, &frameSizeUA, IS_FRAMESUHEAD);
-        if ( frameToSendUA == NULL ) {
-            free(frameToSendDisc);
-            return -1;
+    while(tries < 3) {
+    	alarmed = false;
+        if ( linkLayer.is_receiver ) {
+    		printf("Receiver\n");
+    		res = write(linkLayer.serialFileDescriptor, DISC, DISCsize); //o qie fazer com res
+    		alarm(3);
+    		received = stateMachine(UA, 5);
+    		printf("received: %d\n", received);
         }
+    	else {
+    		printf("Transmitter\n");
+    		res = write(linkLayer.serialFileDescriptor, DISC, DISCsize); //o qie fazer com res
+    		alarm(3);
+    		received = stateMachine(DISC, 5);
+    		printf("received: %d\n", received);
+    		if(received)
+    			res = write(linkLayer.serialFileDescriptor, UA, UAsize); //o qie fazer com res
+    		}
 
-        alarmed = false;
-        while(tries < LLayer.settings->numAttempts) {
+           	if(received)
+            	break;
 
-            write(LLayer.serialFileDescriptor, frameToSendDisc, frameSizeDisc);
-            state = 0;
-
-failedLastPhase:
-            alarm(LLayer.settings->timeout);
-            noEscYet = true;
-
-            while(!alarmed) {
-
-                read(LLayer.serialFileDescriptor, &partOfFrame, 1);
-
-                switch (state) {
-                    case 0:
-                        if (partOfFrame == F)
-                            state = 1;
-                        fprintf(stderr, "state: %d\n", state);
-                        break;
-                    case 1:
-                        if (partOfFrame == A_CSENDER_RRECEIVER) {
-                            state = 2;
-                            storeReceivedA = partOfFrame;
-                        } else if (partOfFrame != F)
-                            state = 0;
-                        fprintf(stderr, "state: %d\n", state);
-                        break;
-                    case 2:
-                        if ( partOfFrame == C_DISC ) {
-                            state = 3;
-                            storeReceivedC = partOfFrame;
-                        } else if (partOfFrame == F)
-                            state = 1;
-                        else
-                            state = 0;
-                        fprintf(stderr, "state: %d\n", state);
-                        break;
-                    case 3:
-                        if ( (partOfFrame == ESC) && noEscYet) {
-                            state = 3;
-                            noEscYet = false;
-                        } else {
-                            if ( noEscYet && (partOfFrame == (storeReceivedA ^ storeReceivedC)))
-                                state = 4;
-                            else if ( !noEscYet && (partOfFrame == ((storeReceivedA ^ storeReceivedC) ^ STUFFING_XOR_BYTE)))
-                                state = 4;
-                            else if (partOfFrame == F)
-                                state = 1;
-                            else
-                                state = 0;
-                            noEscYet = true;
-                        }
-                        fprintf(stderr, "state: %d\n", state);
-                        break;
-                    case 4:
-                        if (partOfFrame == F)
-                            state = 5;
-                        else
-                            state = 0;
-                        break;
-                    case 5:
-                        alarm(0);
-                        alarmed = false;
-                        write(LLayer.serialFileDescriptor,frameToSendUA,frameSizeUA);
-                        alarm(1);
-                        while(!alarmed) {
-                            if ( read(LLayer.serialFileDescriptor, &partOfFrame, 1) == 1 ) {
-                                alarmed = false;
-                                if ( partOfFrame == F ) state = 1;
-                                else state = 0;
-                                ++tries;
-                                goto failedLastPhase;
-                            }
-                        }
-                        goto SUCCESS;
-                        break;
-                    default:
-                        return -1;
-                }
-            }
-            alarmed = false;
-            ++tries;
-        }
-SUCCESS:
-        free(frameToSendDisc);
-        free(frameToSendUA);
+    		tries++;
     }
-    sleep(3);
-    free(payloadsAndFootersLeftOver);
-    payloadsAndFootersLeftOver = NULL;
-    leftOversSize = 0;
 
-    if ( tcsetattr(LLayer.serialFileDescriptor,TCSANOW,&(LLayer.oldtio)) == -1 ) {
+    if ( tcsetattr(linkLayer.serialFileDescriptor,TCSANOW,&(linkLayer.oldtio)) < 0 ) {
       perror("tcsetattr");
+      close(linkLayer.serialFileDescriptor);
       return -1;
     }
 
-    close(LLayer.serialFileDescriptor);
+    close(linkLayer.serialFileDescriptor);
     blocked = false;
-    return 0;
+
+    if(received)
+    		return 0;
+    	else return -1;
 }
+
+
+
+
+/**
+ * More Functions
+ */
+
 
 static void alarm_handler(int signo) {
     alarmed = true;
+    printf("alarm\n");
 }
 
-static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead) {
-    uint8_t *tempHeader;
-    uint8_t temp;
-    uint8_t size = 6;
-
-    if ( frameSize == NULL ) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    tempHeader = (uint8_t *) malloc( sizeof(uint8_t) * size);
-    if ( tempHeader == NULL ) return NULL;
-    tempHeader[0] = F;
-    tempHeader[1] = A;
-    tempHeader[2] = C;
-    tempHeader[3] = generateBcc(tempHeader+1, 2);
-
-    if ( tempHeader[3] == F  || tempHeader[3] == ESC ) {
-        temp = tempHeader[3];
-        tempHeader[3] = ESC;
-        tempHeader[4] = temp ^ STUFFING_XOR_BYTE;
-        temp = 5;
-    } else temp = 4;
-
-    if ( temp == 5 && is_IframeHead ) tempHeader = (uint8_t *) realloc(tempHeader,--size);
-    else if ( temp == 4 && is_IframeHead) {
-        size -= 2;
-        tempHeader = (uint8_t *) realloc(tempHeader,size);
-        if ( tempHeader == NULL ) {
-            free(tempHeader);
-            return NULL;
-        }
-    } else if ( !is_IframeHead ) {
-        tempHeader[temp] = F;
-        if ( temp == 4 ) {
-            tempHeader = (uint8_t *) realloc(tempHeader,--size);
-            if ( tempHeader == NULL ) {
-                free(tempHeader);
-                return NULL;
-            }
-        }
-    }
-
-    *frameSize = size;
-    return tempHeader;
+static void print_frame(uint8_t * frame, size_t size) {
+    size_t i;
+    for(i = 0; i < size; i++)
+        printf("%X ", frame[i]);
+    printf("\n");
 }
 
-static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess) {
+static int stateMachine(uint8_t *packet, size_t packetSize) {
+	uint8_t ch;
+	int state = 0, res;
+	while(!alarmed) {
+		res = read(linkLayer.serialFileDescriptor, &ch, 1);
+		printf("Res: %d\n", res);
 
-    uint8_t xorMe;
-    uint8_t **payloadsAndFooters = NULL;
-    size_t i, t;
-    size_t temp;
-    size_t nCompletePayloadsAndFooters;
-    size_t fillUntil;
+		if(ch == packet[state]) {
+			state++;
+			if(state == 5)
+				return 1;
+		}
+		else if(ch == packet[0])
+			state = 1;
+		else
+			state = 0;
 
-    errno = 0;
-
-    if ( packet == NULL || nPayloadsAndFootersToProcess == NULL ) return NULL;
-
-    if ( leftOversSize != 0 ) {
-        if ( packetSize >= (LLayer.settings->payloadSize - leftOversSize) ) {
-            payloadsAndFooters = (uint8_t **) malloc( sizeof(uint8_t *) * 1);
-            if ( payloadsAndFooters == NULL ) return NULL;
-            payloadsAndFooters[0] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
-            if ( payloadsAndFooters[0] == NULL ) {
-                free(payloadsAndFooters);
-                return NULL;
-            }
-            fillUntil = LLayer.settings->payloadSize;
-            for ( i = 0; i < leftOversSize; ++i) {
-                payloadsAndFooters[0][i] = payloadsAndFootersLeftOver[i];
-            }
-        } else fillUntil = packetSize;
-
-        xorMe = 0x00;
-        for ( i = leftOversSize; i < fillUntil; ++i) {
-            if ( fillUntil < LLayer.settings->payloadSize ) {
-                payloadsAndFootersLeftOver[i] = *packet;
-            } else {
-                payloadsAndFooters[*nPayloadsAndFootersToProcess][i] = *packet;
-                xorMe ^= *packet;
-            }
-            ++packet;
-            --packetSize;
-        }
-        if ( i == LLayer.settings->payloadSize ) {
-            payloadsAndFooters[0][i++] = xorMe;
-            payloadsAndFooters[0][i] = F;
-            *nPayloadsAndFootersToProcess = 1;
-            leftOversSize = 0;
-        } else {
-            leftOversSize = i;
-            *nPayloadsAndFootersToProcess = 0;
-            return NULL;
-        }
-    }
-
-    nCompletePayloadsAndFooters = packetSize / LLayer.settings->payloadSize;
-    temp = *nPayloadsAndFootersToProcess + nCompletePayloadsAndFooters;
-    payloadsAndFooters = (uint8_t **) realloc(payloadsAndFooters, temp);
-    if ( payloadsAndFooters == NULL ) {
-        free(*payloadsAndFooters);
-        free(payloadsAndFooters);
-        return NULL;
-    }
-    for( i = *nPayloadsAndFootersToProcess; i < temp; ++i) {
-        payloadsAndFooters[i] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
-        xorMe = 0x00;
-        for ( t = 0; t < LLayer.settings->payloadSize; ++t) {
-            payloadsAndFooters[i][t] = *packet;
-            xorMe ^= *packet;
-            --packetSize;
-            ++packet;
-        }
-        payloadsAndFooters[i][t++] = xorMe;
-        payloadsAndFooters[i][t] = F;
-    }
-    *nPayloadsAndFootersToProcess = i;
-
-    while(packetSize--) {
-        *payloadsAndFootersLeftOver = *packet;
-        ++packet;
-        ++leftOversSize;
-        ++payloadsAndFootersLeftOver;
-    }
-
-    return payloadsAndFooters;
+		printf("State: %d\n", state);
+	}
+	return 0;
 }
 
-static uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize) {
+static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
+    *stuffedSize = size;
 
-    uint8_t *stuffedIFrame, temp;
-    size_t framedTempSize;
-    size_t i, n, t;
+    size_t i;
+    for(i = 0; i < size; i++)
+        if(packet[i] == F || packet[i] == ESC)
+            (*stuffedSize)++;
 
-    if ( IFrameHeader == NULL || IFrameHeaderSize == 0 || UnstuffedIFrameBody == NULL || framedSize == NULL ) {
-        errno = EINVAL;
-        return NULL;
-    }
+    uint8_t * stuffed = (uint8_t *) malloc (*stuffedSize);
 
-    n = LLayer.settings->payloadSize;
-    framedTempSize = IFrameHeaderSize + n + 2 + n/4;
-
-    stuffedIFrame = (uint8_t *) malloc( sizeof(uint8_t) * framedTempSize );
-    if ( stuffedIFrame == NULL ) return NULL;
-
-    for( i = 0; i < IFrameHeaderSize; ++i) stuffedIFrame[i] = IFrameHeader[i];
-    t = 0;
-    while(n--) {
-        if ( framedTempSize - t <= 10 ) {
-            framedTempSize += 10;
-            stuffedIFrame = (uint8_t *) realloc(stuffedIFrame,framedTempSize);
-            if ( stuffedIFrame == NULL ) {
-                free(stuffedIFrame);
-                return NULL;
-            }
+    size_t j = 0;
+    for(i = 0; i < size; i++) {
+        if(packet[i] == ESC || packet[i] == F) {
+            stuffed[j] = ESC;
+            j++;
+            stuffed[j] = STUFFING_XOR_BYTE ^ packet[i];
         }
-        if ( UnstuffedIFrameBody[t] == ESC || UnstuffedIFrameBody[t] == F ) {
-            temp = UnstuffedIFrameBody[t];
-            stuffedIFrame[i] = ESC;
-            stuffedIFrame[++i] = temp ^ STUFFING_XOR_BYTE;
-        } else stuffedIFrame[i] = UnstuffedIFrameBody[t];
-        ++t;
-        ++i;
+        else
+            stuffed[j] = packet[i];
+        j++;
     }
 
-    stuffedIFrame = (uint8_t *) realloc(stuffedIFrame,i);
-    if ( stuffedIFrame == NULL ) return NULL;
-
-    *framedSize = i;
-
-    return stuffedIFrame;
+    return stuffed;
 }
 
-static uint8_t* unstuffReceivedFrameHeaderAndCheckBcc(uint8_t const *FrameHeader, uint8_t frameHeaderSize, uint8_t *unstuffedHeaderFrameSize, bool is_IframeHead) {
+static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t *headerSize, bool is_IframeHead) {
+    size_t size = 4;
+    bool stuffed = false;
 
-    return NULL;
+    uint8_t BCC = A^C;
+    if(BCC == F || BCC == ESC) {
+        size++;
+        stuffed = true;
+        BCC ^= STUFFING_XOR_BYTE;
+    }
+
+    if(!is_IframeHead)
+        size++;
+
+    uint8_t *header = (uint8_t *) malloc (size);
+
+    uint8_t i = 0;
+    header[i++] = F;
+    header[i++] = A;
+    header[i++] = C;
+
+    if(stuffed)
+        header[i++] = ESC;
+
+    header[i++] = BCC;
+
+    if(!is_IframeHead)
+        header[i] = F;
+
+    *headerSize = size;
+    return header;
 }
 
-static uint8_t* unstuffReceivedIFrameBodyAndCheckBcc(uint8_t const *IFrameBody, uint16_t IFrameBodySize, uint8_t *UnstuffedIFrameBodySize) {
+static uint8_t * buildIFrame(uint8_t * packet, size_t packetSize, size_t * stuffedFrameSize) {
+    size_t stuffedHeaderSize;
+    uint8_t * stuffedHeader = buildFrameHeader(A_CSENDER_RRECEIVER, (linkLayer.sequenceNumber << 6) , &stuffedHeaderSize, true);
 
-    uint16_t lastPart;
-    uint8_t xorMe;
-    uint16_t i;
-    uint16_t totalReads;
-    uint8_t *toReturn;
+    size_t stuffedPacketSize;
+    uint8_t * stuffedPacket = stuff(packet, packetSize, &stuffedPacketSize);
 
+    *stuffedFrameSize = stuffedHeaderSize + stuffedPacketSize + 1; //Header + Packet + F
+    uint8_t * stuffedFrame = (uint8_t *) malloc(*stuffedFrameSize);
 
-    errno = 0;
-    if ( UnstuffedIFrameBodySize == NULL ) {
-        errno = EINVAL;
-        return NULL;
-    }
-    if ( IFrameBodySize < (LLayer.settings->payloadSize + 2) ) {
-        errno = EBADMSG;
-        return NULL;
-    }
+    memcpy (stuffedFrame, stuffedHeader, stuffedHeaderSize);
+    memcpy (stuffedFrame + stuffedHeaderSize, stuffedPacket, stuffedPacketSize);
+    stuffedFrame[*stuffedFrameSize-1] = F;
 
-    toReturn = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize );
-
-    if ( IFrameBody[IFrameBodySize-4] == ESC ) lastPart = 3;
-    else lastPart = 2;
-
-    totalReads = 0;
-    xorMe = 0x00;
-    for( i = 0; i < (IFrameBodySize-lastPart); ++i) {
-        if ( totalReads >= LLayer.settings->payloadSize ) goto wipeThis;
-        if ( IFrameBody[i] == F ) goto wipeThis;
-        else if ( IFrameBody[i] == ESC ) toReturn[totalReads] = IFrameBody[++i] ^ STUFFING_XOR_BYTE;
-        else toReturn[totalReads] = IFrameBody[i];
-        xorMe ^= toReturn[totalReads];
-
-        ++totalReads;
-    }
-
-    if ( (lastPart == 3) && (xorMe != (IFrameBody[IFrameBodySize-lastPart] ^ STUFFING_XOR_BYTE)) ) goto wipeThis;
-    else if ( xorMe != IFrameBody[IFrameBodySize-lastPart] ) goto wipeThis;
-
-    return toReturn;
-wipeThis:
-    errno = EBADMSG;
-    free(toReturn);
-    return NULL;
+    return stuffedFrame;
 }
 
-static uint8_t generateBcc(const uint8_t *data, uint16_t size) {
-
+static uint8_t generateBcc(const uint8_t * data, size_t size) {
     size_t i;
     uint8_t bcc = 0x00;
 
@@ -653,42 +375,8 @@ static uint8_t generateBcc(const uint8_t *data, uint16_t size) {
         return 0;
     }
 
-    for( i = 0; i < size; ++i) {
+    for( i = 0; i < size; ++i)
         bcc ^= data[i];
-    }
 
     return bcc;
 }
-
-static uint8_t generate_crc8(const uint8_t *data, uint16_t size) {
-
-    uint8_t R = 0;
-    uint8_t bitsRead = 0;
-
-    if ( data == NULL || size == 0 ) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    // Calculate the remainder
-    while( size > 0 ) {
-        R <<= 1;
-        R |= (*data >> bitsRead) & 0x1;
-        bitsRead++;
-        if ( bitsRead > 7 ) {
-            bitsRead = 0;
-            size--;
-            data++;
-        }
-        if ( R & 0x80 ) R ^= CRC_8;
-    }
-
-    size_t i;
-    for(i = 0; i < 8; ++i) {
-        R <<=1;
-        if( R & 0x80 ) R ^= CRC_8;
-    }
-
-    return R;
-}
-

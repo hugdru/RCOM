@@ -1,11 +1,11 @@
 #ifndef BUNDLE_H
 #define BUNDLE_H
 
-#include "applayersettings.h"
 #include "linklayersettings.h"
+#include "applayersettings.h"
 
 typedef struct Bundle {
-    char const *name;
+    char const * name;
     LinkLayerSettings llSettings;
     AppLayerSettings alSettings;
 } Bundle;

@@ -5,7 +5,9 @@
 
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
-typedef enum { false, true } bool;
+typedef enum {
+	false, true
+} bool;
 
 #endif
 
