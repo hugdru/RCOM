@@ -220,8 +220,8 @@ int llopen(void) {
                 case 5:
                     if ( LLayer.is_receiver ) write(LLayer.serialFileDescriptor,frameToSend,frameSize);
                     free(frameToSend);
-                    fprintf(stderr, "state: %d\n", state);
                     return 0;
+                    break;
                 default:
                     goto cleanUp;
             }
@@ -385,8 +385,8 @@ failedLastPhase:
                                 goto failedLastPhase;
                             }
                         }
-                        fprintf(stderr, "state: %d\n", state);
                         goto SUCCESS;
+                        break;
                     default:
                         return -1;
                 }
