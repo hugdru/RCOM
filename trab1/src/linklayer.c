@@ -464,7 +464,7 @@ static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool
     return tempHeader;
 }
 
-static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size_t *nPayloadsAndFootersToProcess) {
+static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t packetSize, size_t *nPayloadsAndFootersToProcess) {
 
     uint8_t xorMe;
     uint8_t **payloadsAndFooters = NULL;
@@ -478,7 +478,7 @@ static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size
     if ( packet == NULL || nPayloadsAndFootersToProcess == NULL ) return NULL;
 
     if ( leftOversSize != 0 ) {
-        if ( nBytes >= (LLayer.settings->payloadSize - leftOversSize) ) {
+        if ( packetSize >= (LLayer.settings->payloadSize - leftOversSize) ) {
             payloadsAndFooters = (uint8_t **) malloc( sizeof(uint8_t *) * 1);
             if ( payloadsAndFooters == NULL ) return NULL;
             payloadsAndFooters[0] = (uint8_t *) malloc( sizeof(uint8_t) * LLayer.settings->payloadSize + 2 );
@@ -490,7 +490,7 @@ static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size
             for ( i = 0; i < leftOversSize; ++i) {
                 payloadsAndFooters[0][i] = payloadsAndFootersLeftOver[i];
             }
-        } else fillUntil = nBytes;
+        } else fillUntil = packetSize;
 
         xorMe = 0x00;
         for ( i = leftOversSize; i < fillUntil; ++i) {
@@ -501,7 +501,7 @@ static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size
                 xorMe ^= *packet;
             }
             ++packet;
-            --nBytes;
+            --packetSize;
         }
         if ( i == LLayer.settings->payloadSize ) {
             payloadsAndFooters[0][i++] = xorMe;
@@ -515,7 +515,7 @@ static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size
         }
     }
 
-    nCompletePayloadsAndFooters = nBytes / LLayer.settings->payloadSize;
+    nCompletePayloadsAndFooters = packetSize / LLayer.settings->payloadSize;
     temp = *nPayloadsAndFootersToProcess + nCompletePayloadsAndFooters;
     payloadsAndFooters = (uint8_t **) realloc(payloadsAndFooters, temp);
     if ( payloadsAndFooters == NULL ) {
@@ -529,7 +529,7 @@ static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size
         for ( t = 0; t < LLayer.settings->payloadSize; ++t) {
             payloadsAndFooters[i][t] = *packet;
             xorMe ^= *packet;
-            --nBytes;
+            --packetSize;
             ++packet;
         }
         payloadsAndFooters[i][t++] = xorMe;
@@ -537,7 +537,7 @@ static uint8_t** buildUnstuffedFramesBodies(uint8_t *packet, size_t nBytes, size
     }
     *nPayloadsAndFootersToProcess = i;
 
-    while(nBytes--) {
+    while(packetSize--) {
         *payloadsAndFootersLeftOver = *packet;
         ++packet;
         ++leftOversSize;
