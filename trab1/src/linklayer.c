@@ -170,6 +170,7 @@ int llopen(void) {
                             first = false;
                         }
                         state = 1;
+                        fprintf(stderr, "state: %d\n", state);
                     break;
                 case 1:
                     if (partOfFrame == A_CSENDER_RRECEIVER) {
@@ -177,6 +178,7 @@ int llopen(void) {
                         storeReceivedA = partOfFrame;
                     } else if (partOfFrame != F)
                         state = 0;
+                    fprintf(stderr, "state: %d\n", state);
                     break;
                 case 2:
                     if ( ((partOfFrame == C_SET) && LLayer.is_receiver) ||
@@ -188,6 +190,7 @@ int llopen(void) {
                         state = 1;
                     else
                         state = 0;
+                    fprintf(stderr, "state: %d\n", state);
                     break;
                 case 3:
                     if ( (partOfFrame == ESC) && noEscYet) {
@@ -204,16 +207,19 @@ int llopen(void) {
                             state = 0;
                         noEscYet = true;
                     }
+                    fprintf(stderr, "state: %d\n", state);
                     break;
                 case 4:
                     if (partOfFrame == F)
                         state = 5;
                     else
                         state = 0;
+                    fprintf(stderr, "state: %d\n", state);
                     break;
                 case 5:
                     if ( LLayer.is_receiver ) write(LLayer.serialFileDescriptor,frameToSend,frameSize);
                     free(frameToSend);
+                    fprintf(stderr, "state: %d\n", state);
                     return 0;
                 default:
                     goto cleanUp;
@@ -321,6 +327,7 @@ failedLastPhase:
                     case 0:
                         if (partOfFrame == F)
                             state = 1;
+                        fprintf(stderr, "state: %d\n", state);
                         break;
                     case 1:
                         if (partOfFrame == A_CSENDER_RRECEIVER) {
@@ -328,6 +335,7 @@ failedLastPhase:
                             storeReceivedA = partOfFrame;
                         } else if (partOfFrame != F)
                             state = 0;
+                        fprintf(stderr, "state: %d\n", state);
                         break;
                     case 2:
                         if ( partOfFrame == C_DISC ) {
@@ -337,6 +345,7 @@ failedLastPhase:
                             state = 1;
                         else
                             state = 0;
+                        fprintf(stderr, "state: %d\n", state);
                         break;
                     case 3:
                         if ( (partOfFrame == ESC) && noEscYet) {
@@ -353,6 +362,7 @@ failedLastPhase:
                                 state = 0;
                             noEscYet = true;
                         }
+                        fprintf(stderr, "state: %d\n", state);
                         break;
                     case 4:
                         if (partOfFrame == F)
@@ -374,6 +384,7 @@ failedLastPhase:
                                 goto failedLastPhase;
                             }
                         }
+                        fprintf(stderr, "state: %d\n", state);
                         goto SUCCESS;
                     default:
                         return -1;
