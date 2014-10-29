@@ -170,8 +170,8 @@ int llopen(void) {
                             first = false;
                         }
                         state = 1;
-                        fprintf(stderr, "state: %d\n", state);
                     }
+                    fprintf(stderr, "state: %d\n", state);
                     break;
                 case 1:
                     if (partOfFrame == A_CSENDER_RRECEIVER) {
