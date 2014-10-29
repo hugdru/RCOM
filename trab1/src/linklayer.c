@@ -164,13 +164,14 @@ int llopen(void) {
 
             switch (state) {
                 case 0:
-                    if (partOfFrame == F)
+                    if (partOfFrame == F) {
                         if ( LLayer.is_receiver && first ) {
                             alarm(LLayer.settings->timeout);
                             first = false;
                         }
                         state = 1;
                         fprintf(stderr, "state: %d\n", state);
+                    }
                     break;
                 case 1:
                     if (partOfFrame == A_CSENDER_RRECEIVER) {
