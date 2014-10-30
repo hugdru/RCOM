@@ -97,6 +97,7 @@ int initAppLayer(Bundle *bundle) {
         fprintf(stderr, "Error: llopen()\n");
         exit(1);
     }
+    else printf("llopen() was successful\n");
 
     fprintf(stderr, "After llopen()\n");
     if(IS_RECEIVER(appLayer.settings->status))
