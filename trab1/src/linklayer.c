@@ -27,7 +27,6 @@
 #define ESC 0x7D
 #define STUFFING_XOR_BYTE 0x20
 
-
 typedef struct LinkLayer {
     bool is_receiver;
     unsigned int sequenceNumber;
@@ -42,12 +41,14 @@ typedef struct LinkLayer {
  */
 
 static void alarm_handler(int signo);
+static void print_frame(uint8_t * frame, size_t size);
 static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t * headerSize, bool is_IframeHead);
 static uint8_t * buildIFrame(uint8_t * packet, size_t packetSize, size_t * stuffedFrameSize);
 static uint8_t generateBcc(const uint8_t * data, size_t size);
-static int stateMachine(uint8_t *packet, size_t packetSize);
-static void print_frame(uint8_t * frame, size_t size);
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize);
+static int changeSequenceNumber();
+static bool isKnownC(uint8_t ch);
+static uint8_t readCMD();
 
 
 /**
@@ -135,26 +136,31 @@ int llopen(void) {
     signal(SIGALRM, alarm_handler);  // Sets function alarm_handler as the handler of alarm signals
 
     int received = 0, res;
+    uint8_t C;
+    size_t cmdSize;
+    uint8_t * cmd;
 
-    size_t SETsize, UAsize;
-    uint8_t * SET = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &SETsize, false);
-    uint8_t * UA =  buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &UAsize, false);
-
+    if( linkLayer.is_receiver )
+    	cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &cmdSize, false);
+    else
+    	cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &cmdSize, false);
 
     while(tries < linkLayer.settings->numAttempts) {
     		alarmed = false;
            	if ( linkLayer.is_receiver ) {
     			alarm(3);
-    			received = stateMachine(SET, SETsize);
-    			printf("received: %d\n", received);
-    			if(received)
-    				res = write(linkLayer.serialFileDescriptor, UA, UAsize); // o que fazer com res?
+    			C = readCMD();
+    			if(C == C_SET) {
+    				received = 1;
+    				res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
+    			}
           	}
     		else {
-    			res = write(linkLayer.serialFileDescriptor, SET, SETsize); // o que fazer com res?
+    			res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
     		    alarm(3);
-    		   	received = stateMachine(UA, SETsize);
-    			printf("received: %d\n", received);
+    		    C = readCMD();
+    		    if(C == C_UA)
+    		    	received = 1;
     		}
 
            	if(received)
@@ -174,12 +180,26 @@ int llopen(void) {
 }
 
 int llwrite(uint8_t *packet, size_t packetSize) {
-    // Construir as tramas de supervisão e não numeradas que vão ser precisas
-    /*uint8_t* buildFrameHeader(uint8_t A, uint8_t C, uint16_t *frameSize, bool is_IframeHead);*/
+	/*
+	size_t stuffedFrameSize;
+	uint8_t * stuffedFrame = buildIFrame(packet, packetSize, &stuffedFrameSize);
 
-    // Depois vem a máquina de estados
-        // Ir construindo as tramas completas de informação à medida que vão sendo precisas
-        // uint8_t* buildIFrame(uint8_t const *IFrameHeader, uint8_t IFrameHeaderSize, uint8_t const *UnstuffedIFrameBody, size_t *framedSize);
+	unsigned tries = 0;
+	int received = 0, res;
+    while(tries < linkLayer.settings->numAttempts) {
+    		alarmed = false;
+
+    		printf("Sending frame\n");
+    		res = write(linkLayer.serialFileDescriptor, stuffedFrame, stuffedFrameSize); // o que fazer com res?
+    		alarm(3);
+
+    		//Máquina de estados
+
+
+    		tries++;
+    }
+
+	*/
 
     return 0;
 }
@@ -207,31 +227,30 @@ int llclose(void) {
     size_t DISCsize, UAsize;
     uint8_t * DISC = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &DISCsize, false);
     uint8_t * UA =  buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &UAsize, false);
-
+    uint8_t C;
     int received = 0, res;
 
-    while(tries < 3) {
+    while(tries < linkLayer.settings->numAttempts) {
     	alarmed = false;
         if ( linkLayer.is_receiver ) {
-    		printf("Receiver\n");
-    		res = write(linkLayer.serialFileDescriptor, DISC, DISCsize); //o qie fazer com res
+    		res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
     		alarm(3);
-    		received = stateMachine(UA, 5);
-    		printf("received: %d\n", received);
+    		C = readCMD();
+    		if(C == C_UA)
+    			received = 1;
         }
     	else {
-    		printf("Transmitter\n");
-    		res = write(linkLayer.serialFileDescriptor, DISC, DISCsize); //o qie fazer com res
+    		res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
     		alarm(3);
-    		received = stateMachine(DISC, 5);
-    		printf("received: %d\n", received);
+    		C = readCMD();
+    		if(C == C_DISC)
+    			received = 1;
     		if(received)
     			res = write(linkLayer.serialFileDescriptor, UA, UAsize); //o qie fazer com res
     		}
 
            	if(received)
             	break;
-
     		tries++;
     }
 
@@ -262,6 +281,10 @@ static void alarm_handler(int signo) {
     printf("alarm\n");
 }
 
+static int changeSequenceNumber() {
+	return 1 - linkLayer.sequenceNumber;
+}
+
 static void print_frame(uint8_t * frame, size_t size) {
     size_t i;
     for(i = 0; i < size; i++)
@@ -269,26 +292,80 @@ static void print_frame(uint8_t * frame, size_t size) {
     printf("\n");
 }
 
-static int stateMachine(uint8_t *packet, size_t packetSize) {
-	uint8_t ch;
+static bool isKnownC(uint8_t ch) {
+	return (ch == C_SET || ch == C_UA || ch == C_DISC ||
+			(ch & 0x7F) ==  C_RR_RAW || 	// Ao fazer AND se ch for RR com sequencia 1 ou 0, a expressao é verdadeira
+			(ch & 0x7F)==  C_REJ_RAW);
+}
+
+static uint8_t readCMD() {
+	uint8_t ch, C, BCC;
+	bool stuffing = false;
 	int state = 0, res;
+
 	while(!alarmed) {
 		res = read(linkLayer.serialFileDescriptor, &ch, 1);
-		printf("Res: %d\n", res);
+		printf("res: %d\n", res);
+		printf("State: %d", state);
+		switch(state) {
+			case 0:
+				if(ch == F)
+					state = 1;
+				break;
+			case 1:
+				if(ch == A_CSENDER_RRECEIVER) {
+					state = 2;
+					BCC = ch;
+				}
+				else if(ch != F)
+					state = 0;
+				break;
+			case 2:
+				if(ch == F)
+					state = 1;
+				else {
+					if(isKnownC(ch)) {
+						BCC ^= ch;
+						C = ch;
+						state = 3;
+					}
+					else
+						state = 0;
+				}
+				break;
+			case 3:
+				//Destuffing in run-time
+				if(stuffing) {
+					stuffing = false;
+					if( (ch ^ STUFFING_XOR_BYTE) == BCC)
+						state = 4;
+					else if (ch == F)
+						state = 1;
+					else
+						state = 0;
+				}
+				else {
+					if(ch == ESC)
+						stuffing = true;
 
-		if(ch == packet[state]) {
-			state++;
-			if(state == 5)
-				return 1;
+					else if(ch == BCC)
+						state = 4;
+					else if(state == F)
+						state = 1;
+					else
+						state = 0;
+				}
+				break;
+			case 4:
+				if(ch == F)
+					return C; //Leu bem, devolve o C do comando
+				else
+					state = 0;
+				break;
 		}
-		else if(ch == packet[0])
-			state = 1;
-		else
-			state = 0;
-
-		printf("State: %d\n", state);
 	}
-	return 0;
+
+	return 0xFE; //Falhou, devolve -1
 }
 
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
