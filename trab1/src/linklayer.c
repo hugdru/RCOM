@@ -194,26 +194,40 @@ int llopen(void) {
 }
 
 int llwrite(uint8_t *packet, size_t packetSize) {
-	/*
-	 size_t stuffedFrameSize;
-	 uint8_t * stuffedFrame = buildIFrame(packet, packetSize, &stuffedFrameSize);
+	size_t stuffedFrameSize;
+	uint8_t * stuffedFrame = buildIFrame(packet, packetSize, &stuffedFrameSize);
 
-	 unsigned tries = 0;
-	 int received = 0, res;
-	 while(tries < linkLayer.settings->numAttempts) {
-	 alarmed = false;
+	unsigned int tries = 0;
+	bool received = false, done = false;
+	int res;
+	uint8_t C;
 
-	 printf("Sending frame\n");
-	 res = write(linkLayer.serialFileDescriptor, stuffedFrame, stuffedFrameSize); // o que fazer com res?
-	 alarm(3);
+	while (tries < linkLayer.settings->numAttempts) {
+		alarmed = false;
 
-	 //Máquina de estados
+		printf("Sending frame\n");
+		res = write(linkLayer.serialFileDescriptor, stuffedFrame,
+				stuffedFrameSize); // o que fazer com res?
+		alarm(3);
+		received = readCMD(&C);
+		if (received)
+			switch (C) {
+			case (C_RR_RAW | (linkLayer.sequenceNumber << 7)): // RR Errado
+				break;
+			case (C_RR_RAW | (changeSequenceNumber() << 7)): // RR Certo
+				linkLayer.sequenceNumber = changeSequenceNumber();
+				return res;
+				break;
+			case (C_REJ_RAW | (linkLayer.sequenceNumber << 7)): //REJ Certo
+				break;
+			case (C_REJ_RAW | (linkLayer.sequenceNumber << 7)): //REJ Errado
+				break;
+			default: //Recebeu um comando que não esperava
+				break;
+			}
 
-
-	 tries++;
-	 }
-
-	 */
+		tries++;
+	}
 
 	return 0;
 }
@@ -222,12 +236,42 @@ int llwrite(uint8_t *packet, size_t packetSize) {
 // retorna NULL e errno = 0, se receber disconnect e depois um UA para a applayer depois fazer llclose
 // retorna endereço do pacote, *packetSize tamanho do pacote recebido
 uint8_t* llread(size_t *payloadSize) {
+	/*
+	linkLayer.frameLength = 0;
 
-	// Usar a variável receiverState para o estado ficar guardado entre chamadas, pq é global
-	// Fazer unstuffing e cacular BCC
-	// Se receber uma trama de informação válida, preenche o tamanho *packetSize, retorna o endereço do pacote (tem de estar unstuffed!)
+	unsigned int tries = 0;
+	bool received = false, done = false;
+	int res;
+	uint8_t C;
+
+	while (tries < linkLayer.settings->numAttempts) {
+		alarmed = false;
+
+		printf("Receiving frame\n");
+		received = readCMD(&C);
+
+		if (received)
+			switch (C) {
+			case C_SET: // Transmitter não recebeu bem o UA
+				break;
+			case C_DISC: // Transmitter já enviou tudo
+				break;
+			case (C_I_RAW | (linkLayer.sequenceNumber << 7)): //Trama I esperada, falta case trama I esperada mas com erros :/
+				linkLayer.sequenceNumber = changeSequenceNumber();
+				*payloadSize = linkLayer.frameLength;
+				return linkLayer.frame;
+				break;
+			case (C_I_RAW | (linkLayer.sequenceNumber << 7)): //Trama I duplicada
+				break;
+			default: //Recebeu um comando que não esperava
+				break;
+		}
+
+		tries++;
+	}
 
 	return NULL;
+	*/
 }
 
 int llclose(void) {
@@ -393,8 +437,7 @@ static bool readCMD(uint8_t * C) {
 				print_cmd(*C);
 				printf("\n");
 				return true;
-			}
-			else if (isCMDI(*C)) {
+			} else if (isCMDI(*C)) {
 				linkLayer.frame[linkLayer.frameLength++] = F;
 				linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
 				linkLayer.frame[linkLayer.frameLength++] = *C;
