@@ -88,7 +88,7 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 	linkLayer.settings = ptr;
 	linkLayer.is_receiver = is_receiver;
 
-	linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize);
+	linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize + 6);
 	linkLayer.frameLength = 0;
 
 	blocked = true;
@@ -386,7 +386,7 @@ static bool isCMDI(uint8_t ch) {
 
 static bool readCMD(uint8_t * C) {
 	int res;
-	uint8_t ch, BCC1 = A_CSENDER_RRECEIVER, BCC2;
+	uint8_t ch, BCC1 = A_CSENDER_RRECEIVER, BCC2, temp;
 	bool stuffing = false;
 	State state = START;
 
@@ -400,9 +400,10 @@ static bool readCMD(uint8_t * C) {
 				state = F_RCV;
 			break;
 		case F_RCV:
-			if (ch == A_CSENDER_RRECEIVER)
+			if (ch == A_CSENDER_RRECEIVER) {
 				state = A_RCV;
-			else if (ch != F)
+                BCC1 = ch;
+            } else if (ch != F)
 				state = START;
 			break;
 		case A_RCV:
@@ -426,34 +427,47 @@ static bool readCMD(uint8_t * C) {
 				stuffing = true;
 			else if (ch == BCC1)
 				state = BCC_OK;
-			else if (state == F)
+			else if (ch == F)
 				state = F_RCV;
 			else
 				state = START;
 			break;
 		case BCC_OK:
-			if (ch == F) {
+			if (ch == F && isCMD(*C)) {
 				printf("Received CMD: ");
 				print_cmd(*C);
 				printf("\n");
 				return true;
-			} else if (isCMDI(*C)) {
+			} else if (isCMDI(*C) && ch != F) {
 				linkLayer.frame[linkLayer.frameLength++] = F;
 				linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
 				linkLayer.frame[linkLayer.frameLength++] = *C;
 				linkLayer.frame[linkLayer.frameLength++] = BCC1;
+                if ( ch == ESC ) {
+                    stuffing = true;
+                    BCC2 = 0x00;
+                } else {
+                    linkLayer.frame[linkLayer.frameLength++] = ch;
+                    BCC2 = ch;
+                }
 				state = RCV_I;
 				printf("Receiving Frame I\n");
 			} else
 				state = START;
 			break;
 		case RCV_I:
-			if (ch == F) {
-				BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimi é o BCC2
-				linkLayer.frame[linkLayer.frameLength++] = ch;
+            if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
+                linkLayer.frameLength = 0;
+                if (ch == F) state = F_RCV;
+                else state = START;
+            } else if ( (ch == F) && stuffing ) {
+                state = F_RCV;
+                linkLayer.frameLength = 0;
+            } else if (ch == F) {
+				BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC2
 				if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
 					linkLayer.frame[linkLayer.frameLength++] = ch;
-					printf("Received Frame I, Length: %d",
+					printf("Received Frame I, Length: %lu",
 							linkLayer.frameLength);
 					return true;
 				} else {
@@ -462,11 +476,15 @@ static bool readCMD(uint8_t * C) {
 				}
 			} else if (stuffing) {	//Destuffing in run-time
 				stuffing = false;
-				ch ^= STUFFING_XOR_BYTE;
-			} else if (ch == ESC)
+                temp = ch ^ STUFFING_XOR_BYTE;
+                linkLayer.frame[linkLayer.frameLength++] = temp;
+				BCC2 ^= temp;
+			} else if (ch == ESC) {
 				stuffing = true;
-
-			linkLayer.frame[linkLayer.frameLength++] = ch;
+            } else {
+                BCC2 ^= ch;
+                linkLayer.frame[linkLayer.frameLength++] = ch;
+            }
 			break;
 		}
 	}

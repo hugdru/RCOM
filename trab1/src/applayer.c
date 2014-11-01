@@ -166,7 +166,7 @@ static int parserPacket(uint8_t* packet, size_t size) {
 
 static int read(void) {
         uint8_t *packet;
-        uint16_t packetSize;
+        size_t packetSize;
         int end = 0;
         bool disconnected = false;
 
