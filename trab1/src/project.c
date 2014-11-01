@@ -1,6 +1,8 @@
 #include "parser.h"
 #include "applayer.h"
 
+#include <stdlib.h>
+
 #include "linklayer.h" // So para tests
 
 #define IS_RECEIVER(n) (!((n)>>4)) // So para tests
