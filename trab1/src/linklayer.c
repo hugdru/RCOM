@@ -87,6 +87,7 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 
 	linkLayer.settings = ptr;
 	linkLayer.is_receiver = is_receiver;
+    linkLayer.sequenceNumber = 0;
 
 	linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize + 6);
 	linkLayer.frameLength = 0;
@@ -144,7 +145,7 @@ int llopen(void) {
 		return -1;
 	}
 
-	printf("New termios structure set\n");
+	fprintf(stderr, "New termios structure set\n");
 
 	signal(SIGALRM, alarm_handler); // Sets function alarm_handler as the handler of alarm signals
 
@@ -206,7 +207,7 @@ int llwrite(uint8_t *packet, size_t packetSize) {
 	while (tries < linkLayer.settings->numAttempts) {
 		alarmed = false;
 
-		printf("Sending frame\n");
+		fprintf(stderr, "Sending frame\n");
 		res = write(linkLayer.serialFileDescriptor, stuffedFrame,
 				stuffedFrameSize); // o que fazer com res?
 		alarm(linkLayer.settings->timeout);
@@ -233,11 +234,13 @@ int llwrite(uint8_t *packet, size_t packetSize) {
 // retorna endereço do pacote, *packetSize tamanho do pacote recebido
 uint8_t* llread(size_t *payloadSize) {
 
-    static bool noSet = false;
+    static bool blockedSet = false;
+    static bool blockedIFramesOnValidDisconnect = false;
     unsigned int tries = 0;
     bool received;
     ssize_t res;
-    uint8_t C, previousC = 0;
+    uint8_t C;
+    uint8_t previousC;
     uint8_t *payloadToReturn;
     size_t i, tempSize;
 
@@ -279,51 +282,69 @@ uint8_t* llread(size_t *payloadSize) {
     errno = 0;
 
     while (tries < linkLayer.settings->numAttempts) {
-        printf("Receiving frame\n");
+        fprintf(stderr, "Receiving frame\n");
         alarmed = false;
         alarm(linkLayer.settings->timeout);
         received = readCMD(&C);
+        if (tries == 0) previousC = C;
 
         if (received) {
-            if (C == C_SET && !noSet) { // Transmitter não recebeu bem o UA
-                res = write(linkLayer.serialFileDescriptor, uaCmd, uaCmdSize); // o que fazer com res?
-            } else {
-                noSet = true;
-                if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { //Trama I esperada, Tramas I com erros são tratadas na máquina de estados low level (readCMD)
-                    tempSize = linkLayer.frameLength - 6;
-                    payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
-                    if ( payloadToReturn == NULL ) {
+            if (!blockedSet) {
+                if ( C == C_SET ) { // Transmitter não recebeu bem o UA
+                    res = write(linkLayer.serialFileDescriptor, uaCmd, uaCmdSize); // o que fazer com res?
+                } else if ( C != C_I_RAW ) {
+                    fprintf(stderr, "Garbage command received"); // O ruído pode 'construir' uma trama sem erros não esperada!
+                    // Como não sei se vou receber um set ou uma trama de informação não faço nada
+                } else blockedSet = true;
+            }
+            if (blockedSet) {
+                if (!blockedIFramesOnValidDisconnect) {
+                    if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { //Trama I esperada, Tramas I com erros são tratadas na máquina de estados low level (readCMD)
+                        tempSize = linkLayer.frameLength - 6;
+                        payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
+                        if ( payloadToReturn == NULL ) {
+                            free(uaCmd);
+                            free(discCmd);
+                            free(rr0Cmd);
+                            free(rr1Cmd);
+                            errno = ENOMEM;
+                            return NULL;
+                        }
+                        for (i = 0; i < tempSize; ++i) {
+                            payloadToReturn[i] = linkLayer.frame[i+4];
+                        }
+                        *payloadSize = tempSize;
+                        linkLayer.sequenceNumber = changeSequenceNumber();
+                        if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                        else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                        return payloadToReturn;
+                    } else if ( C != (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
+                        if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                        else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                        fprintf(stderr, "Trama duplicada");
+                    } else if ( C == C_DISC && ((previousC == C_I_RAW) ) ) { // Transmitter já enviou tudo
+                        blockedIFramesOnValidDisconnect = true;
+                    } else { // Recebeu uma trama de supervisão ou não numerada válida mas não esperada, ruído tramado!
+                        if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                        else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                        fprintf(stderr, "Não esperava esta trama");
+                    }
+                }
+                if (blockedIFramesOnValidDisconnect) {
+                    if ( C != C_UA ) { // Transmitter já enviou tudo, recebeu DISC
+                        res = write(linkLayer.serialFileDescriptor,discCmd,discCmdSize);
+                    } else { // Indica que já não há nada a receber, recebeu UA
                         free(uaCmd);
                         free(discCmd);
                         free(rr0Cmd);
                         free(rr1Cmd);
-                        errno = ENOMEM;
                         return NULL;
                     }
-                    for (i = 0; i < tempSize; ++i) {
-                        payloadToReturn[i] = linkLayer.frame[i+4];
-                    }
-                    *payloadSize = tempSize;
-                    linkLayer.sequenceNumber = changeSequenceNumber();
-                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                    return payloadToReturn;
-                } else if ( C != (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { //Trama I duplicada
-                    printf("Trama duplicada");
-                } else if ((C == C_DISC) && (previousC == C_I_RAW)) { // Transmitter já enviou tudo
-                    res = write(linkLayer.serialFileDescriptor,discCmd,discCmdSize);
-                } else if ((C == C_UA) && (previousC == C_DISC)) { // Indica a applayer que já não há nada a receber
-                    free(uaCmd);
-                    free(discCmd);
-                    return NULL;
-                } else { //Recebeu um comando que não esperava
-                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                    printf("Não esperava esta trama");
                 }
             }
         }
         if (previousC == C || !received) ++tries;
+        else tries = 0;
         previousC = C;
     }
 
@@ -400,7 +421,7 @@ int llclose(void) {
 
 static void alarm_handler(int signo) {
 	alarmed = true;
-	printf("alarm\n");
+	fprintf(stderr, "alarm\n");
 }
 
 static int changeSequenceNumber(void) {
@@ -410,29 +431,29 @@ static int changeSequenceNumber(void) {
 static void print_frame(uint8_t * frame, size_t size) {
 	size_t i;
 	for (i = 0; i < size; i++)
-		printf("%X ", frame[i]);
-	printf("\n");
+		fprintf(stderr, "%X ", frame[i]);
+	fprintf(stderr, "\n");
 }
 
 static void print_cmd(uint8_t C) {
 	switch (C) {
 	case C_SET:
-		printf("C_SET");
+		fprintf(stderr, "C_SET");
 		break;
 	case C_UA:
-		printf("C_UA");
+		fprintf(stderr, "C_UA");
 		break;
 	case C_DISC:
-		printf("C_DISC");
+		fprintf(stderr, "C_DISC");
 		break;
 	case C_RR_RAW:
-		printf("C_RR_RAW");
+		fprintf(stderr, "C_RR_RAW");
 		break;
 	case C_REJ_RAW:
-		printf("C_REJ_RAW");
+		fprintf(stderr, "C_REJ_RAW");
 		break;
 	case C_I_RAW:
-		printf("C_I_RAW");
+		fprintf(stderr, "C_I_RAW");
 		break;
     default:
         break;
@@ -458,7 +479,7 @@ static bool readCMD(uint8_t * C) {
 
 	while (!alarmed) {
 		res = read(linkLayer.serialFileDescriptor, &ch, 1);
-		printf("State: %d     Res: %lu\n", state, res);
+		fprintf(stderr, "State: %d     Res: %lu\n", state, res);
 
 		switch (state) {
 		case START:
@@ -500,9 +521,9 @@ static bool readCMD(uint8_t * C) {
 			break;
 		case BCC_OK:
 			if (ch == F && isCMD(*C)) {
-				printf("Received CMD: ");
+				fprintf(stderr, "Received CMD: ");
 				print_cmd(*C);
-				printf("\n");
+				fprintf(stderr, "\n");
 				return true;
 			} else if (isCMDI(*C) && ch != F) {
 				linkLayer.frame[linkLayer.frameLength++] = F;
@@ -517,7 +538,7 @@ static bool readCMD(uint8_t * C) {
                     BCC2 = ch;
                 }
 				state = RCV_I;
-				printf("Receiving Frame I\n");
+				fprintf(stderr, "Receiving Frame I\n");
 			} else
 				state = START;
 			break;
