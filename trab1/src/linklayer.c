@@ -593,6 +593,7 @@ static bool readCMD(uint8_t * C) {
                 break;
             case RCV_I:
                 if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
+                    fprintf(stderr, "This payload is invalid cause it exceeds the max number of bytes\n");
                     linkLayer.frameLength = 0;
                     if (ch == F) state = F_RCV;
                     else state = START;
@@ -601,9 +602,11 @@ static bool readCMD(uint8_t * C) {
                     linkLayer.frameLength = 0;
                     stuffing = false;
                 } else if (ch == F) {
+                    fprintf(stderr, "Finishing up Iframe, F received\n");
                     BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC2
+                    fprintf(stderr, "BBC2: %X, BBC2 in frame: %X\n", BCC2, linkLayer.frame[linkLayer.frameLength-1]);
                     if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
-                        linkLayer.frame[linkLayer.frameLength] = ch;
+                        linkLayer.frame[linkLayer.frameLength++] = ch;
                         printf("Received Frame I, Length: %lu",
                                 linkLayer.frameLength);
                     }
