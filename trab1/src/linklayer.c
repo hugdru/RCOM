@@ -493,13 +493,22 @@ static void print_cmd(uint8_t C) {
         fprintf(stderr, "C_DISC");
         break;
     case C_RR_RAW:
-        fprintf(stderr, "C_RR_RAW");
+        fprintf(stderr, "C_RR_0");
+        break;
+    case (C_RR_RAW | 0x80):
+        fprintf(stderr, "C_RR_1");
         break;
     case C_REJ_RAW:
-        fprintf(stderr, "C_REJ_RAW");
+        fprintf(stderr, "C_REJ_0");
+        break;
+    case (C_REJ_RAW | 0x80):
+        fprintf(stderr, "C_REJ_1");
         break;
     case C_I_RAW:
-        fprintf(stderr, "C_I_RAW");
+        fprintf(stderr, "C_I_0");
+        break;
+    case (C_I_RAW | 0x40):
+        fprintf(stderr, "C_I_1");
         break;
     default:
         break;
