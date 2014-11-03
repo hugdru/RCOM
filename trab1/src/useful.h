@@ -6,7 +6,7 @@
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
 typedef enum {
-	false, true
+    false, true
 } bool;
 
 #endif

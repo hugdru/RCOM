@@ -45,8 +45,8 @@ int main(int argc, char *argv[])
     llinitialize(&Bundles[0]->llSettings,IS_RECEIVER(Bundles[0]->alSettings.status)); // testing
 
     if ( llopen() < 0 ) {
-    	printf("llopen() was unsuccessful\n");
-    	goto cleanUp; // testing
+        printf("llopen() was unsuccessful\n");
+        goto cleanUp; // testing
     }
     else printf("llopen() was successful\n");
 
@@ -65,9 +65,9 @@ int main(int argc, char *argv[])
 
 
     if( llclose() < 0 )
-    	printf("llclose() was unsuccessful\n");
+        printf("llclose() was unsuccessful\n");
     else
-    	printf("llclose() was successful\n");
+        printf("llclose() was successful\n");
 
 
     /*if( initAppLayer(Bundles[0]) < 0)*/
