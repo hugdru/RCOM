@@ -124,23 +124,21 @@ int initAppLayer(Bundle *bundle) {
 
 static int parserPacket(uint8_t* packet, size_t size) {
     uint8_t C = packet[0];
-
-    if(C == C_DATA) {
+    int res;
+   //if(C == C_DATA) {
         uint8_t L2 = packet[2];
         uint8_t L1 = packet[3];
         uint32_t dataSize = 256 * L2 + L1;
+        
+        if(appLayer.settings->status == STATUS_RECEIVER_FILE)
+                res = fwrite(packet+4, 1, dataSize, appLayer.settings->io.fptr);
+                
+        fprintf(stderr, "ParserPacket Res: %d\n", res);
+      
+ 
+    //}
 
-        size_t i;
-        for(i = 0; i < dataSize; i++) {
-            if(appLayer.settings->status == STATUS_RECEIVER_FILE)
-                fprintf(appLayer.settings->io.fptr, "%c", packet[4+i]);
-
-            else if(appLayer.settings->status == STATUS_RECEIVER_STREAM)
-                fprintf(stderr, "%c", packet[4+i]);
-        }
-    }
-
-    else if(C == C_START) {
+     if(C == C_START) {
         size_t i = 1;
         while(i < size) {
             uint8_t type = packet[i++];
@@ -171,8 +169,8 @@ static int parserPacket(uint8_t* packet, size_t size) {
 
         }
     }
-
     else if(C == C_END) {
+                
         llclose();
         return 1;
     }

@@ -556,7 +556,7 @@ static bool readCMD(uint8_t * C) {
 
         if ( res == 1 ) {
             fprintf(stderr, "State: %d     Res: %lu\n", state, res);
-            fprintf(stderr, "Char: %c\n", ch);
+            fprintf(stderr, "Char: %X\n", ch);
             switch (state) {
             case START:
                 if (ch == F)
@@ -630,8 +630,8 @@ static bool readCMD(uint8_t * C) {
                     linkLayer.frameLength = 0;
                     stuffing = false;
                 } else if (ch == F) {
-                    fprintf(stderr, "Finishing up Iframe, F received\n");
-                    BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC2
+                    fprintf(stderr, "AAAAAAAAAAAmakeFinishing up Iframe, F received\n");
+                    BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC
                     fprintf(stderr, "BBC2: %X, BBC2 in frame: %X\n", BCC2, linkLayer.frame[linkLayer.frameLength-1]);
                     if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
                         linkLayer.frame[linkLayer.frameLength++] = ch;
@@ -642,11 +642,16 @@ static bool readCMD(uint8_t * C) {
                     // Rej e RR, fora ele verifica se o último elemento é F ou não
                     return true;
                 } else if (stuffing) {  //Destuffing in run-time
+                    fprintf(stderr, "STTTTTTTTTTTTTTTTUUUUUUUUUUUUUUUFFFFFFFFFFFFFFFFF\n");
+                    fprintf(stderr, "Ch: %X\n", ch);
                     stuffing = false;
                     temp = ch ^ STUFFING_XOR_BYTE;
+                     fprintf(stderr, "Temp: %X\n", temp);
                     linkLayer.frame[linkLayer.frameLength++] = temp;
                     BCC2 ^= temp;
+                    fprintf(stderr, "BCC2: %X\n", BCC2);
                 } else if (ch == ESC) {
+                    fprintf(stderr, "ESSSSSSSSSSSSSSSSSSSSSSCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\n");
                     stuffing = true;
                 } else {
                     BCC2 ^= ch;
@@ -663,16 +668,15 @@ static bool readCMD(uint8_t * C) {
 }
 
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
-    *stuffedSize = size;
+    *stuffedSize = size+1;
 
     uint8_t BCC = generateBcc(packet, size);
 
     size_t i;
     for (i = 0; i < size; i++)
-        if (packet[i] == F || packet[i] == ESC)
+        if (packet[i] == ESC || packet[i] == F)
             (*stuffedSize)++;
 
-    (*stuffedSize)++;
     if(BCC == ESC || BCC == F)
         (*stuffedSize)++;
 
@@ -681,19 +685,19 @@ static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
     size_t j = 0;
     for (i = 0; i < size; i++) {
         if (packet[i] == ESC || packet[i] == F) {
-            stuffed[j] = ESC;
-            j++;
-            stuffed[j] = STUFFING_XOR_BYTE ^ packet[i];
+            stuffed[j++] = ESC;
+            stuffed[j++] = (STUFFING_XOR_BYTE ^ packet[i]);
+            fprintf(stderr, "\n\nsssssssssssssssssssssssssssssssssssssssssss\n\n\nStuff: Estava: %X, ficou: %X %X\n", packet[i], ESC, (STUFFING_XOR_BYTE ^ packet[i]));
         } else
-            stuffed[j] = packet[i];
-        j++;
+            stuffed[j++] = packet[i];
     }
 
     if(BCC == ESC || BCC == F) {
-        stuffed[*stuffedSize-2] = ESC;
-        stuffed[*stuffedSize-1] = BCC^STUFFING_XOR_BYTE;
+        stuffed[j++] = ESC;
+        stuffed[j++] = BCC ^ STUFFING_XOR_BYTE;
+          fprintf(stderr, "\n\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n\nStuff: Estava: %X, ficou: %X %X\n", BCC, ESC, (STUFFING_XOR_BYTE ^BCC));
     }
-    stuffed[*stuffedSize-1] = BCC;
+    stuffed[j++] = BCC;
 
     return stuffed;
 }
