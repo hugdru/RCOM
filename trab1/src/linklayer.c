@@ -198,7 +198,7 @@ int llopen(void) {
 int llwrite(uint8_t *packet, size_t packetSize) {
     size_t stuffedFrameSize;
     uint8_t * stuffedFrame = buildIFrame(packet, packetSize, &stuffedFrameSize);
-    
+
     unsigned int tries = 0;
     bool received, done = false;
     ssize_t res;
@@ -212,9 +212,9 @@ int llwrite(uint8_t *packet, size_t packetSize) {
         res = write(linkLayer.serialFileDescriptor, stuffedFrame,
                 stuffedFrameSize);
         alarm(linkLayer.settings->timeout);
-        
+
         received = readCMD(&C);
-        
+
         fprintf(stderr, "Receive: %d\n", received);
         if (received) {
             tries = 0;
@@ -227,7 +227,7 @@ int llwrite(uint8_t *packet, size_t packetSize) {
             } else { //Recebeu um comando que não esperava
             }
         }
-        
+
         tries++;
     }
 
@@ -517,45 +517,20 @@ static bool isCMDI(uint8_t ch) {
 
 static bool readCMD(uint8_t * C) {
     ssize_t res;
-<<<<<<< HEAD
-    uint8_t ch, BCC1 = A_CSENDER_RRECEIVER, BCC2 = 0x00, temp;
-=======
     uint8_t ch, BCC1 = 0x00, BCC2 = 0x00, temp;
->>>>>>> 5a1f77a551c8dae2f60b717f41c4b376973ac5e2
     bool stuffing = false;
     State state = START;
 
     linkLayer.frameLength = 0;
-    
+
+    // Não sei se isto tem um problema, imagina o seguinte:
+    // O emissor envia uma trama com erro, como ele espera até receber
+    // a resposta (e como não envia nada enquanto) não vai haver nada para ler
+    // por isso ele vai esperar nesta função algum tempo desnecessariamente até tocar o alarm.
+    // Uma maneira de resolver era adicionar um parâmetro que indicava o comando a reenviar em caso de erro
+    // Não vou fazer isto por enquanto pq muda o prototipo e não quero estar a confundir as coisas
     while (!alarmed) {
         res = read(linkLayer.serialFileDescriptor, &ch, 1);
-<<<<<<< HEAD
-      
-    if(res == 1) {
-        fprintf(stderr, "State: %d     Res: %lu\n", state, res);
-        fprintf(stderr, "Char: %X    BCC: %X\n", ch, BCC2);
-        switch (state) {
-        case START:
-            if (ch == F)
-                state = F_RCV;
-            break;
-        case F_RCV:
-            if (ch == A_CSENDER_RRECEIVER) {
-                state = A_RCV;
-                BCC1 = ch;
-            } else if (ch != F)
-                state = START;
-            break;
-        case A_RCV:
-            if (ch == F)
-                state = F_RCV;
-            else {
-                if (isCMD(ch) || isCMDI(ch)) {
-                    BCC1 ^= ch;
-                    *C = ch;
-                    state = C_RCV;
-                } else
-=======
 
         if ( res == 1 ) {
             fprintf(stderr, "State: %d     Res: %lu\n", state, res);
@@ -570,7 +545,6 @@ static bool readCMD(uint8_t * C) {
                     state = A_RCV;
                     BCC1 = ch;
                 } else if (ch != F)
->>>>>>> 5a1f77a551c8dae2f60b717f41c4b376973ac5e2
                     state = START;
                 break;
             case A_RCV:
@@ -656,70 +630,30 @@ static bool readCMD(uint8_t * C) {
                     BCC2 ^= ch;
                     linkLayer.frame[linkLayer.frameLength++] = ch;
                 }
-<<<<<<< HEAD
-                state = RCV_I;
-                fprintf(stderr, "Receiving Frame I\n");
-            } else
-                state = START;
-            break;
-        case RCV_I:
-            if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
-                linkLayer.frameLength = 0;
-                if (ch == F) state = F_RCV;
-                else state = START;
-            } else if ( (ch == F) && stuffing ) {
-                state = F_RCV;
-                linkLayer.frameLength = 0;
-            } else if (ch == F) {
-                BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC2
-               
-                if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
-
-                    linkLayer.frame[linkLayer.frameLength++] = ch;
-                    printf("Received Frame I, Length: %lu",
-                            linkLayer.frameLength);
-                }
-                // Uma vez que tem o cabeçalho da header válido
-                // Rej e RR, fora ele verifica se o último elemento é F ou não
-                return true;
-            } else if (stuffing) {  //Destuffing in run-time
-                stuffing = false;
-                temp = ch ^ STUFFING_XOR_BYTE;
-                linkLayer.frame[linkLayer.frameLength++] = temp;
-                BCC2 ^= temp;
-            } else if (ch == ESC) {
-                stuffing = true;
-            } else {
-                BCC2 ^= ch;
-                linkLayer.frame[linkLayer.frameLength++] = ch;
-=======
                 break;
             default:
                 return false;
                 break;
->>>>>>> 5a1f77a551c8dae2f60b717f41c4b376973ac5e2
             }
+        }
     }
-    }
-    }
-    fprintf(stderr, "OUT!");
     return false;
 }
 
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
     *stuffedSize = size;
-    
+
     uint8_t BCC = generateBcc(packet, size);
- 
+
     size_t i;
     for (i = 0; i < size; i++)
         if (packet[i] == F || packet[i] == ESC)
             (*stuffedSize)++;
-    
-    (*stuffedSize)++;       
+
+    (*stuffedSize)++;
     if(BCC == ESC || BCC == F)
         (*stuffedSize)++;
-        
+
     uint8_t * stuffed = (uint8_t *) malloc(*stuffedSize);
 
     size_t j = 0;
@@ -738,7 +672,7 @@ static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
         stuffed[*stuffedSize-1] = BCC^STUFFING_XOR_BYTE;
     }
     stuffed[*stuffedSize-1] = BCC;
-    
+
     return stuffed;
 }
 

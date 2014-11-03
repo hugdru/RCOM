@@ -1,6 +1,7 @@
 **/tags
 **/buildtemp
 **/bin
+**/bin/*
 **/codigo_*/README.txt
 **/.*
 **/.*~
