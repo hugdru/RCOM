@@ -95,11 +95,10 @@ int initAppLayer(Bundle *bundle) {
 
     if( llopen() < 0) {
         fprintf(stderr, "Error: llopen()\n");
-        exit(1);
+        return -1;
     }
     else fprintf(stderr, "llopen() was successful\n");
 
-    fprintf(stderr, "After llopen()\n");
     if(IS_RECEIVER(appLayer.settings->status)) {
         res = read();
         if ( res != 0 ) {
@@ -113,6 +112,12 @@ int initAppLayer(Bundle *bundle) {
             return -1;
         }
     }
+    
+     if( llclose() < 0) {
+        fprintf(stderr, "Error: llclose()\n");
+        return -1;
+    }
+    else fprintf(stderr, "llclose() was successful\n");
 
     return 0;
 }
@@ -177,25 +182,71 @@ static int parserPacket(uint8_t* packet, size_t size) {
 static int read(void) {
         uint8_t *packet;
         size_t packetSize;
-        int end = 0;
         bool disconnected = false;
 
-        while(!end) {
+        while(1) {
             packet = llread(&packetSize);
-            if ( errno != 0 ) return -1;
+            fprintf(stderr, "AppRead packet: ");
+            int i = 0;
+            for(; i < packetSize; i++)
+                 fprintf(stderr, "%c", packet[i]);
+            if ( errno != 0 ) 
+                return -1;
             else {
-                if ( packet == NULL ) return -1;
-                if ( errno == 0 && packet == NULL ) {
-                // Disconnect received, will not receive more packets
-                disconnected = true;
-                } else {
-                // Ainda não acabou
-                end = parserPacket(packet, packetSize);
-
+                if ( packet == NULL )
+                    return 0;
+                else {
+                parserPacket(packet, packetSize);
                 }
             }
         }
         return 0;
+}
+
+static int write(void) {
+    size_t res;
+    bool end = false;
+    uint8_t data[appLayer.settings->packetBodySize];
+    size_t stringSize, lidos = 0;
+    
+    if(appLayer.settings->status == STATUS_TRANSMITTER_STRING)
+        stringSize = strlen(appLayer.settings->io.chptr);
+    else
+    writeStartPacket();
+
+    while(!end) {
+        if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
+            res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
+            
+            fprintf(stderr, "AppWrite packet: %s\n", data);
+            if(res < appLayer.settings->packetBodySize)
+                end = true; // End of file
+        }
+            
+        else if(appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
+            if(stringSize - lidos <  appLayer.settings->packetBodySize) {
+                memcpy(data, appLayer.settings->io.chptr+lidos, stringSize-lidos);
+                end = true;
+            }
+            else {
+                memcpy(data, appLayer.settings->io.chptr+lidos, appLayer.settings->packetBodySize);
+                lidos += appLayer.settings->packetBodySize;
+            }
+            fprintf(stderr, "AppWrite packet: %s\n", data);
+            
+        }
+        
+        else {
+            //Por fazer, ler stream
+        }
+
+        writeDataPacket(data, res);
+    }
+    
+    if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) 
+        writeEndPacket();
+        
+    return 0;
 }
 
 static int writeStartPacket(void) {
@@ -218,33 +269,9 @@ static int writeEndPacket(void) {
 static int writeDataPacket(uint8_t *data, size_t size) {
     uint8_t packet[appLayer.settings->packetBodySize + 4];
 
-    //sprintf(packet,"%c%c%c%c%s", C_DATA, 1, size/256, size%256, data);
+    sprintf(packet,"%X%X%X%X%s", C_DATA, 1, size/256, size%256, data);
+    fprintf(stderr, "DataPacket: %s\n", packet);
     return llwrite(packet, strlen(packet));
 }
 
-static int write(void) {
-    size_t res;
-    bool end = false;
-    uint8_t data[appLayer.settings->packetBodySize];
-
-    writeStartPacket();
-
-    while(!end) {
-        if(appLayer.settings->status == STATUS_TRANSMITTER_FILE)
-            res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
-        else if(appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
-            int jaLidos = 10; //falta adicionar variavel a incrementar sempre que é lido mais x caracteres
-            strncpy(data, appLayer.settings->io.chptr+jaLidos, appLayer.settings->packetBodySize);
-        }
-        else {
-            //Por fazer, ler stream
-        }
-
-        if(res < appLayer.settings->packetBodySize)
-            end = true; // End of file
-        writeDataPacket(data, res);
-    }
-
-    writeEndPacket();
-}
 

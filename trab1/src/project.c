@@ -55,26 +55,8 @@ int main(int argc, char *argv[])
     size_t payloadSize;
     uint8_t *data;
 
-    if ( IS_RECEIVER(Bundles[0]->alSettings.status) ) {
-        data = llread(&payloadSize);
-        fprintf(stderr, "data: ");
-        for ( i = 0; i < payloadSize; ++i) {
-            fprintf(stderr, "%c",data[i] );
-        }
-        fprintf(stderr, "\n");
-    } else {
-        llwrite(stringy,10);
-    }
-
-
-    if( llclose() < 0 )
-        fprintf(stderr, "llclose() was unsuccessful\n");
-    else
-        fprintf(stderr, "llclose() was successful\n");
-
-
-    /*if( initAppLayer(Bundles[0]) < 0)*/
-        /*fprintf(stderr, "Error: Initializing app layer\n");*/
+  if( initAppLayer(Bundles[0]) < 0)
+        fprintf(stderr, "Error: Initializing app layer\n");
     return 0;
 
 cleanUp:
