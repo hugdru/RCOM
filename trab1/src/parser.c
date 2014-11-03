@@ -214,9 +214,9 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                 Bundles[i]->alSettings.status = STATUS_TRANSMITTER_FILE;
                 ptr = strrchr(optarg, '/');
                 if (ptr == NULL)
-                    ptr = optarg;
+                    Bundles[i]->alSettings.fileName = optarg;
                 else
-                    ++ptr;
+                    Bundles[i]->alSettings.fileName = ++ptr;
                 break;
             case 'R':
                 if ((Bundles[i]->alSettings.io.fptr = fopen(optarg, "w+b"))
@@ -227,9 +227,9 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                 Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE;
                 ptr = strrchr(optarg, '/');
                 if (ptr == NULL)
-                    ptr = optarg;
+                    Bundles[i]->alSettings.fileName = optarg;
                 else
-                    ++ptr;
+                    Bundles[i]->alSettings.fileName = ++ptr;
                 break;
             case 'm':
                 Bundles[i]->alSettings.io.chptr = optarg;
