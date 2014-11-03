@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     if ( IS_RECEIVER(Bundles[0]->alSettings.status) ) {
         data = llread(&payloadSize);
         fprintf(stderr, "data: ");
-        for ( i = 0; i < payloadSize; ++i) {
+        for ( i = 0; i < payloadSize+1; ++i) {
             fprintf(stderr, "%c",data[i] );
         }
         fprintf(stderr, "\n");
