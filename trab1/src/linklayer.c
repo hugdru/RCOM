@@ -309,7 +309,7 @@ uint8_t* llread(size_t *payloadSize) {
             if (!blockedSet) {
                 if ( C == C_SET ) { // Transmitter não recebeu bem o UA
                     res = write(linkLayer.serialFileDescriptor, uaCmd, uaCmdSize); // o que fazer com res?
-                } else if ( C != C_I_RAW ) {
+                } else if ( !isCMDI(C) ) { // Se não for uma trama de informação
                     fprintf(stderr, "Garbage command received"); // O ruído pode 'construir' uma trama sem erros não esperada!
                     // Como não sei se vou receber um set ou uma trama de informação não faço nada
                 } else blockedSet = true;
@@ -511,7 +511,7 @@ static bool isCMDI(uint8_t ch) {
 
 static bool readCMD(uint8_t * C) {
     ssize_t res;
-    uint8_t ch, BCC1 = A_CSENDER_RRECEIVER, BCC2, temp;
+    uint8_t ch, BCC1 = 0x00, BCC2 = 0x00, temp;
     bool stuffing = false;
     State state = START;
 
@@ -525,104 +525,108 @@ static bool readCMD(uint8_t * C) {
     // Não vou fazer isto por enquanto pq muda o prototipo e não quero estar a confundir as coisas
     while (!alarmed) {
         res = read(linkLayer.serialFileDescriptor, &ch, 1);
-        fprintf(stderr, "State: %d     Res: %lu\n", state, res);
 
-        switch (state) {
-        case START:
-            if (ch == F)
-                state = F_RCV;
-            break;
-        case F_RCV:
-            if (ch == A_CSENDER_RRECEIVER) {
-                state = A_RCV;
-                BCC1 = ch;
-            } else if (ch != F)
-                state = START;
-            break;
-        case A_RCV:
-            if (ch == F)
-                state = F_RCV;
-            else {
-                if (isCMD(ch) || isCMDI(ch)) {
-                    BCC1 ^= ch;
-                    *C = ch;
-                    state = C_RCV;
+        if ( res == 1 ) {
+            fprintf(stderr, "State: %d     Res: %lu\n", state, res);
+            fprintf(stderr, "Char: %c\n", ch);
+            switch (state) {
+            case START:
+                if (ch == F)
+                    state = F_RCV;
+                break;
+            case F_RCV:
+                if (ch == A_CSENDER_RRECEIVER) {
+                    state = A_RCV;
+                    BCC1 = ch;
+                } else if (ch != F)
+                    state = START;
+                break;
+            case A_RCV:
+                if (ch == F)
+                    state = F_RCV;
+                else {
+                    if (isCMD(ch) || isCMDI(ch)) {
+                        BCC1 ^= ch;
+                        *C = ch;
+                        state = C_RCV;
+                    } else
+                        state = START;
+                }
+                break;
+            case C_RCV:
+                if (stuffing) { //Destuffing in run-time
+                    stuffing = false;
+                    if ((ch ^ STUFFING_XOR_BYTE) == BCC1) {
+                        state = BCC_OK;
+                    }
+                } else if (ch == ESC) {
+                    stuffing = true;
+                } else if (ch == BCC1) {
+                    state = BCC_OK;
+                } else if (ch == F)
+                    state = F_RCV;
+                else
+                    state = START;
+                break;
+            case BCC_OK:
+                if (ch == F && isCMD(*C)) {
+                    fprintf(stderr, "Received CMD: ");
+                    print_cmd(*C);
+                    fprintf(stderr, "\n");
+                    return true;
+                } else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
+                    linkLayer.frame[linkLayer.frameLength++] = F;
+                    linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
+                    linkLayer.frame[linkLayer.frameLength++] = *C;
+                    linkLayer.frame[linkLayer.frameLength++] = BCC1;
+                    if ( ch == ESC ) {
+                        stuffing = true;
+                        BCC2 = 0x00;
+                    } else {
+                        linkLayer.frame[linkLayer.frameLength++] = ch;
+                        BCC2 = ch;
+                    }
+                    state = RCV_I;
+                    fprintf(stderr, "Receiving Frame I\n");
                 } else
                     state = START;
-            }
-            break;
-        case C_RCV:
-            if (stuffing) { //Destuffing in run-time
-                stuffing = false;
-                if ((ch ^ STUFFING_XOR_BYTE) == BCC1) {
-                    state = BCC_OK;
-                }
-            } else if (ch == ESC) {
-                stuffing = true;
-            } else if (ch == BCC1) {
-                state = BCC_OK;
-            } else if (ch == F)
-                state = F_RCV;
-            else
-                state = START;
-            break;
-        case BCC_OK:
-            if (ch == F && isCMD(*C)) {
-                fprintf(stderr, "Received CMD: ");
-                print_cmd(*C);
-                fprintf(stderr, "\n");
-                return true;
-            } else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
-                linkLayer.frame[linkLayer.frameLength++] = F;
-                linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
-                linkLayer.frame[linkLayer.frameLength++] = *C;
-                linkLayer.frame[linkLayer.frameLength++] = BCC1;
-                if ( ch == ESC ) {
+                break;
+            case RCV_I:
+                if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
+                    linkLayer.frameLength = 0;
+                    if (ch == F) state = F_RCV;
+                    else state = START;
+                } else if ( (ch == F) && stuffing ) {
+                    state = F_RCV;
+                    linkLayer.frameLength = 0;
+                    stuffing = false;
+                } else if (ch == F) {
+                    BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC2
+                    if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
+                        linkLayer.frame[linkLayer.frameLength] = ch;
+                        printf("Received Frame I, Length: %lu",
+                                linkLayer.frameLength);
+                    }
+                    // Uma vez que tem o cabeçalho da header válido
+                    // Rej e RR, fora ele verifica se o último elemento é F ou não
+                    return true;
+                } else if (stuffing) {  //Destuffing in run-time
+                    stuffing = false;
+                    temp = ch ^ STUFFING_XOR_BYTE;
+                    linkLayer.frame[linkLayer.frameLength++] = temp;
+                    BCC2 ^= temp;
+                } else if (ch == ESC) {
                     stuffing = true;
-                    BCC2 = 0x00;
                 } else {
+                    BCC2 ^= ch;
                     linkLayer.frame[linkLayer.frameLength++] = ch;
-                    BCC2 = ch;
                 }
-                state = RCV_I;
-                fprintf(stderr, "Receiving Frame I\n");
-            } else
-                state = START;
-            break;
-        case RCV_I:
-            if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
-                linkLayer.frameLength = 0;
-                if (ch == F) state = F_RCV;
-                else state = START;
-            } else if ( (ch == F) && stuffing ) {
-                state = F_RCV;
-                linkLayer.frameLength = 0;
-            } else if (ch == F) {
-                BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC2
-                if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
-                    linkLayer.frame[linkLayer.frameLength++] = ch;
-                    printf("Received Frame I, Length: %lu",
-                            linkLayer.frameLength);
-                }
-                // Uma vez que tem o cabeçalho da header válido
-                // Rej e RR, fora ele verifica se o último elemento é F ou não
-                return true;
-            } else if (stuffing) {  //Destuffing in run-time
-                stuffing = false;
-                temp = ch ^ STUFFING_XOR_BYTE;
-                linkLayer.frame[linkLayer.frameLength++] = temp;
-                BCC2 ^= temp;
-            } else if (ch == ESC) {
-                stuffing = true;
-            } else {
-                BCC2 ^= ch;
-                linkLayer.frame[linkLayer.frameLength++] = ch;
+                break;
+            default:
+                return false;
+                break;
             }
-            break;
-        default:
-            return false;
-            break;
-        }
+    }
     }
     return false;
 }

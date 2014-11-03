@@ -17,7 +17,7 @@ size_t NBundles = 0;
 int main(int argc, char *argv[])
 {
     size_t i = 0;
-    uint8_t stringy[20] = "Olá macaco";
+    uint8_t stringy[20] = "OlaMacaco";
 
     Bundles = parse_args(argc, argv, &NBundles);
     if ( Bundles == NULL) {
