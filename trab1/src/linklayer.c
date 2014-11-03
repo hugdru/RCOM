@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE
 #include "linklayer.h"
 
 #include <sys/types.h>
@@ -65,9 +66,11 @@ static bool readCMD(uint8_t * C);
  * Global Variables
  */
 
-bool blocked = false;
+bool blockedSet = false; // Usado no LLread -> Não usar para mais nada
+bool blocked = false; // Usado para o llinitialize, llopen e llclose -> Não usar para mais nada
 bool alarmed = false;
-uint8_t receiverState = 0;
+struct sigaction *new_act = NULL;
+
 LinkLayer linkLayer;
 
 /**
@@ -75,6 +78,8 @@ LinkLayer linkLayer;
  */
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
+
+
     if (blocked) {
         fprintf(stderr, "You can only initialize once\n");
         return -1;
@@ -88,6 +93,22 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     linkLayer.settings = ptr;
     linkLayer.is_receiver = is_receiver;
     linkLayer.sequenceNumber = 0;
+
+    if ( new_act == NULL ) {
+        new_act = (struct sigaction *) malloc(sizeof(struct sigaction));
+        if ( new_act == NULL ) {
+            errno = ENOMEM;
+            return -1;
+        }
+        new_act->sa_handler = alarm_handler;
+        sigemptyset(&(new_act->sa_mask));
+        new_act->sa_flags = 0;
+        if ( sigaction(SIGALRM, new_act, 0 ) == -1 ) {
+            new_act = NULL;
+            free(new_act);
+            return -1;
+        }
+    }
 
     linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize + 6);
     linkLayer.frameLength = 0;
@@ -147,7 +168,10 @@ int llopen(void) {
 
     fprintf(stderr, "New termios structure set\n");
 
-    signal(SIGALRM, alarm_handler); // Sets function alarm_handler as the handler of alarm signals
+    // Esta funcao esta deprecated e estava a dar problemas acontecia o seguinte
+    // 'There are few reasons and most important is that the original Unix implementation would reset the signal handler to it's default value after signal is received'
+    // From http://www.linuxprogrammingblog.com/all-about-linux-signals?page=show
+    // signal(SIGALRM, alarm_handler); // Sets function alarm_handler as the handler of alarm signals
 
     uint8_t C;
     uint8_t * cmd;
@@ -164,21 +188,17 @@ int llopen(void) {
         alarmed = false;
         if (linkLayer.is_receiver) {
             alarm(linkLayer.settings->timeout);
-            do {
-                received = readCMD(&C);
-                if (received && C == C_SET) {
-                    res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
-                    return 0;
-                }
-            } while (!alarmed);
+            received = readCMD(&C);
+            if (received && C == C_SET) {
+                res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
+                return 0;
+            }
         } else {
             res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
             alarm(linkLayer.settings->timeout);
-            do {
-                received = readCMD(&C);
-                if (received && C == C_UA)
-                    return 0;
-            } while (!alarmed);
+            received = readCMD(&C);
+            if (received && C == C_UA)
+                return 0;
         }
 
         tries++;
@@ -240,8 +260,6 @@ int llwrite(uint8_t *packet, size_t packetSize) {
 // retorna endereço do pacote, *packetSize tamanho do pacote recebido
 uint8_t* llread(size_t *payloadSize) {
 
-    static bool blockedSet = false;
-    static bool blockedIFramesOnValidDisconnect = false;
     unsigned int tries = 0;
     bool received;
     ssize_t res;
@@ -396,6 +414,7 @@ uint8_t* llread(size_t *payloadSize) {
 
 int llclose(void) {
     unsigned int tries = 0;
+    static bool success = false;
 
     if (!blocked) {
         fprintf(stderr, "You have to llinitialize and llopen first\n");
@@ -411,47 +430,53 @@ int llclose(void) {
     int received;
     ssize_t res;
 
-    while (tries < linkLayer.settings->numAttempts) {
-        alarmed = false;
-        // Esta parte é para mudar, só depois de o appLayer estar feito
-        if (linkLayer.is_receiver) {
-            res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
-            alarm(linkLayer.settings->timeout);
-            do {
+    if ( !success ) {
+        while (tries < linkLayer.settings->numAttempts) {
+            alarmed = false;
+            // Esta parte é para mudar, só depois de o appLayer estar feito
+            if (linkLayer.is_receiver) {
+                res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
+                alarm(linkLayer.settings->timeout);
                 received = readCMD(&C);
-                if (received && C == C_UA)
-                    goto cleanSerial;
-            } while (!alarmed);
-        } else {
-            res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
-            alarm(linkLayer.settings->timeout);
-            do {
-                received = readCMD(&C);
-                if (received && C == C_DISC) {
-                    res = write(linkLayer.serialFileDescriptor, UA, UAsize); //o qie fazer com res
+                if (received && C == C_UA) {
+                    success = true;
                     goto cleanSerial;
                 }
-            } while (!alarmed);
+            } else {
+                res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
+                alarm(linkLayer.settings->timeout);
+                received = readCMD(&C);
+                if (received && C == C_DISC) {
+                    res = write(linkLayer.serialFileDescriptor, UA, UAsize); //o que fazer com res
+                    success = true;
+                    goto cleanSerial;
+                }
+            }
+            tries++;
         }
-        tries++;
     }
 
     cleanSerial:
 
-    if (tcsetattr(linkLayer.serialFileDescriptor, TCSANOW, &(linkLayer.oldtio))
-            < 0) {
-        perror("tcsetattr");
-        close(linkLayer.serialFileDescriptor);
-        return -1;
+    blockedSet = false;
+
+    if ( linkLayer.frame != NULL ) {
+        free(linkLayer.frame);
+        linkLayer.frame = NULL;
     }
 
-    close(linkLayer.serialFileDescriptor);
-    blocked = false;
-
-    if (received)
+    if (success) {
+        if (tcsetattr(linkLayer.serialFileDescriptor, TCSANOW, &(linkLayer.oldtio)) < 0) {
+            perror("tcsetattr");
+            return -1;
+        }
+        if ( close(linkLayer.serialFileDescriptor) != 0 ) return -1;
+        blocked = false;
+        success = false;
+        free(new_act);
+        new_act = NULL;
         return 0;
-    else
-        return -1;
+    } else return -1;
 }
 
 /**
