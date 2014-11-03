@@ -186,11 +186,15 @@ static int read(void) {
 
         while(1) {
             packet = llread(&packetSize);
-            if ( errno != 0 ) 
+            if ( errno != 0 ) {
+                fprintf(stderr, "AppRead errno\n");
                 return -1;
+            }
             else {
-                if ( packet == NULL )
+                if ( packet == NULL ) {
+                    fprintf(stderr, "AppRead NULL\n");
                     return 0;
+                }
                 else {
                 fprintf(stderr, "AppRead packet: ");
                 int i = 0;
@@ -206,18 +210,22 @@ static int read(void) {
 static int write(void) {
     size_t res;
     bool end = false;
-    uint8_t data[appLayer.settings->packetBodySize];
+    uint8_t data[appLayer.settings->packetBodySize+10];
     size_t stringSize, lidos = 0;
+    int numCharWritted = 0;
     
     if(appLayer.settings->status == STATUS_TRANSMITTER_STRING)
         stringSize = strlen(appLayer.settings->io.chptr);
-    else
-    writeStartPacket();
-
+   else {
+        // writeStartPacket();
+        rewind(appLayer.settings->io.fptr);
+   }
+    
+    
     while(!end) {
         if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
             res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
-            
+            fprintf(stderr, "AppWrite Res: %d\n", res);
             fprintf(stderr, "AppWrite packet: %s\n", data);
             if(res < appLayer.settings->packetBodySize)
                 end = true; // End of file
@@ -239,13 +247,19 @@ static int write(void) {
         else {
             //Por fazer, ler stream
         }
-
-        writeDataPacket(data, res);
+        
+        if( writeDataPacket(data, res) == 1) {
+             fprintf(stderr, "AppWrite Number of chars read so far: %d\n", numCharWritted);
+             fprintf(stderr, "AppWrite failed\n");
+             return -1;
+        }
+        numCharWritted += res;
     }
     
     if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) 
         writeEndPacket();
         
+    fprintf(stderr, "\n\nAppWrite Number of chars Writted: %d\n\n", numCharWritted);
     return 0;
 }
 
