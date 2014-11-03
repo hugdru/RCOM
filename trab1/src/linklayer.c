@@ -285,7 +285,6 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
     if ( rr0Cmd == NULL ) {
         free(uaCmd);
-        free(discCmd);
         errno = ENOMEM;
         return NULL;
     }
@@ -293,7 +292,6 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
     if ( rr1Cmd == NULL ) {
         free(uaCmd);
-        free(discCmd);
         free(rr0Cmd);
         errno = ENOMEM;
         return NULL;
@@ -302,7 +300,6 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *rej0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW, &rej0CmdSize, false);
     if ( rej0Cmd == NULL ) {
         free(uaCmd);
-        free(discCmd);
         free(rr0Cmd);
         free(rr1Cmd);
         errno = ENOMEM;
@@ -312,7 +309,6 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *rej1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW | 0x80, &rej1CmdSize, false);
     if ( rej1Cmd == NULL ) {
         free(uaCmd);
-        free(discCmd);
         free(rr0Cmd);
         free(rr1Cmd);
         free(rej0Cmd);
@@ -347,7 +343,7 @@ uint8_t* llread(size_t *payloadSize) {
                         res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
                     else
                         res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
-                } else if ( (C != (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
+                } else if ( (C == (C_I_RAW | (changeSequenceNumber() << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
                     // rr
                     fprintf(stderr, "Cabeça da trama I boa, resto mau, sequência diferente -> rr\n");
                     if (linkLayer.sequenceNumber)
@@ -361,7 +357,6 @@ uint8_t* llread(size_t *payloadSize) {
                     payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
                     if ( payloadToReturn == NULL ) {
                         free(uaCmd);
-                        free(discCmd);
                         free(rr0Cmd);
                         free(rr1Cmd);
                         free(rej0Cmd);
@@ -377,14 +372,15 @@ uint8_t* llread(size_t *payloadSize) {
                     if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
                     else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     return payloadToReturn;
-                } else if ( C != (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
-                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                } else if ( C == (C_I_RAW | (changeSequenceNumber() << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
+                    if ( linkLayer.sequenceNumber == 0 ) 
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else 
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     fprintf(stderr, "Trama duplicada");
-                } else if ( C == C_DISC && (previousC == C_I_RAW) ) { // Transmitter já enviou tudo
+                } else if ( C == C_DISC ) { // Transmitter já enviou tudo
                     fprintf(stderr, "LLread received valid disconnect\n");
                     free(uaCmd);
-                    free(discCmd);
                     free(rr0Cmd);
                     free(rr1Cmd);
                     free(rej0Cmd);
@@ -403,7 +399,6 @@ uint8_t* llread(size_t *payloadSize) {
     }
 
     free(uaCmd);
-    free(discCmd);
     free(rr0Cmd);
     free(rr1Cmd);
     free(rej0Cmd);

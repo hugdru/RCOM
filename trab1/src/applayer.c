@@ -113,7 +113,7 @@ int initAppLayer(Bundle *bundle) {
         }
     }
     
-     if( llclose() < 0) {
+    if( llclose() < 0) {
         fprintf(stderr, "Error: llclose()\n");
         return -1;
     }
@@ -186,16 +186,16 @@ static int read(void) {
 
         while(1) {
             packet = llread(&packetSize);
-            fprintf(stderr, "AppRead packet: ");
-            int i = 0;
-            for(; i < packetSize; i++)
-                 fprintf(stderr, "%c", packet[i]);
             if ( errno != 0 ) 
                 return -1;
             else {
                 if ( packet == NULL )
                     return 0;
                 else {
+                fprintf(stderr, "AppRead packet: ");
+                int i = 0;
+                for(; i < packetSize; i++)
+                    fprintf(stderr, "%c", packet[i]);
                 parserPacket(packet, packetSize);
                 }
             }
