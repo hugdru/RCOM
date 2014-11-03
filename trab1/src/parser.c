@@ -35,6 +35,8 @@ void print_usage(char **argv) {
 
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr,
+            " -h  \t\tFor help\n");
+    fprintf(stderr,
             " -b  Number\tChange baudRate to a certain value, defaults to 38400\n");
     fprintf(stderr,
             " -d  Path\tSet the serial port device file, defaults to /dev/ttyS0\n");
@@ -61,6 +63,7 @@ void print_usage(char **argv) {
     printf("     -R  Path\t\tWhere to place received file\n");
 
     printf("\n--- Examples ---\n");
+    printf("%s -h\n", ptr);
     printf(
             "%s -N 2 -d '/dev/ttyS1' -t 5 -r 4 -S \"~/pictures/cat.jpeg\" + -d '/dev/ttyS2' -R \"~/passwords.kbd\"\n",
             ptr);
@@ -151,7 +154,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
             return NULL;
         }
 
-        while ((c = getopt((int) subArgc, oldSubArgv, "N:b:d:t:r:n:S:R:m:f:s:x"))
+        while ((c = getopt((int) subArgc, oldSubArgv, "N:b:d:t:r:n:S:R:m:f:s:xh"))
                 != -1) {
 
             if (c == 'b' || c == 't' || c == 'r' || c == 'f' || c == 's') {

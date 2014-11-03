@@ -71,9 +71,9 @@ int initAppLayer(Bundle *bundle) {
 
     if(bundle == NULL) {
         fprintf(stderr, "Error: bundle is null\n");
+        errno = EINVAL;
         return 1;
     }
-
 
     appLayer.settings = &bundle->alSettings;
 

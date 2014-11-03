@@ -421,6 +421,7 @@ int llclose(void) {
 
     while (tries < linkLayer.settings->numAttempts) {
         alarmed = false;
+        // Esta parte é para mudar, só depois de o appLayer estar feito
         if (linkLayer.is_receiver) {
             res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
             alarm(linkLayer.settings->timeout);

@@ -26,29 +26,29 @@ int main(int argc, char *argv[])
     }
 
     // Testing
-    printf("NBundles: %lu\n", NBundles);
+    fprintf(stderr, "NBundles: %lu\n", NBundles);
     for(i = 0; i < NBundles; ++i) {
         if ( Bundles[i]->name != NULL)
-            printf("Name: %s\n", Bundles[i]->name);
+            fprintf(stderr, "Name: %s\n", Bundles[i]->name);
 
-        printf("baudRate: %d\n", Bundles[i]->llSettings.baudRate);
+        fprintf(stderr, "baudRate: %d\n", Bundles[i]->llSettings.baudRate);
 
         if ( Bundles[i]->llSettings.port != NULL )
-            printf("port: %s\n", Bundles[i]->llSettings.port);
+            fprintf(stderr, "port: %s\n", Bundles[i]->llSettings.port);
 
-        printf("timeout: %d\n", Bundles[i]->llSettings.timeout);
-        printf("numAttempts: %d\n", Bundles[i]->llSettings.numAttempts);
-        printf("status: %d\n", Bundles[i]->alSettings.status);
-        printf("packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
+        fprintf(stderr, "timeout: %d\n", Bundles[i]->llSettings.timeout);
+        fprintf(stderr, "numAttempts: %d\n", Bundles[i]->llSettings.numAttempts);
+        fprintf(stderr, "status: %d\n", Bundles[i]->alSettings.status);
+        fprintf(stderr, "packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
     }
 
     llinitialize(&Bundles[0]->llSettings,IS_RECEIVER(Bundles[0]->alSettings.status)); // testing
 
     if ( llopen() < 0 ) {
-        printf("llopen() was unsuccessful\n");
+        fprintf(stderr, "llopen() was unsuccessful\n");
         goto cleanUp; // testing
     }
-    else printf("llopen() was successful\n");
+    else fprintf(stderr, "llopen() was successful\n");
 
     size_t payloadSize;
     uint8_t *data;
@@ -66,18 +66,17 @@ int main(int argc, char *argv[])
 
 
     if( llclose() < 0 )
-        printf("llclose() was unsuccessful\n");
+        fprintf(stderr, "llclose() was unsuccessful\n");
     else
-        printf("llclose() was successful\n");
+        fprintf(stderr, "llclose() was successful\n");
 
 
     /*if( initAppLayer(Bundles[0]) < 0)*/
-        /*printf("Error: Initializing app layer\n");*/
+        /*fprintf(stderr, "Error: Initializing app layer\n");*/
     return 0;
 
 cleanUp:
     wipeBundles();
-    fprintf(stderr, "There was an error, report it to devs\n");
     return -1;
 }
 
