@@ -246,35 +246,52 @@ uint8_t* llread(size_t *payloadSize) {
 
     size_t uaCmdSize;
     uint8_t *uaCmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &uaCmdSize, false);
-
-    size_t discCmdSize;
-    uint8_t *discCmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &discCmdSize, false);
-
-    size_t rr0CmdSize;
-    uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
-
-    size_t rr1CmdSize;
-    uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
-
     if ( uaCmd == NULL ) {
         errno = ENOMEM;
         return NULL;
     }
+    size_t discCmdSize;
+    uint8_t *discCmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &discCmdSize, false);
     if ( discCmd == NULL ) {
         free(uaCmd);
         errno = ENOMEM;
         return NULL;
     }
+    size_t rr0CmdSize;
+    uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
     if ( rr0Cmd == NULL ) {
         free(uaCmd);
         free(discCmd);
         errno = ENOMEM;
         return NULL;
     }
+    size_t rr1CmdSize;
+    uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
     if ( rr1Cmd == NULL ) {
         free(uaCmd);
         free(discCmd);
+        free(rr0Cmd);
+        errno = ENOMEM;
+        return NULL;
+    }
+    size_t rej0CmdSize;
+    uint8_t *rej0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW, &rej0CmdSize, false);
+    if ( rej0Cmd == NULL ) {
+        free(uaCmd);
+        free(discCmd);
+        free(rr0Cmd);
         free(rr1Cmd);
+        errno = ENOMEM;
+        return NULL;
+    }
+    size_t rej1CmdSize;
+    uint8_t *rej1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW | 0x80, &rej1CmdSize, false);
+    if ( rej1Cmd == NULL ) {
+        free(uaCmd);
+        free(discCmd);
+        free(rr0Cmd);
+        free(rr1Cmd);
+        free(rej0Cmd);
         errno = ENOMEM;
         return NULL;
     }
@@ -299,7 +316,21 @@ uint8_t* llread(size_t *payloadSize) {
             }
             if (blockedSet) {
                 if (!blockedIFramesOnValidDisconnect) {
-                    if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { //Trama I esperada, Tramas I com erros são tratadas na máquina de estados low level (readCMD)
+                        /* Trata do caso do header da tramaI estiver certo mas o body estiver errado */
+                        if ( (C == (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
+                            // rej
+                            if (linkLayer.sequenceNumber)
+                                res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
+                            else
+                                res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
+                        } else if ( (C != (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
+                            // rr
+                            if (linkLayer.sequenceNumber)
+                                res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                            else
+                                res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                        /* Fim de caso especial header certo mas body errado */
+                        } else if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I esperada
                         tempSize = linkLayer.frameLength - 6;
                         payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
                         if ( payloadToReturn == NULL ) {
@@ -307,6 +338,8 @@ uint8_t* llread(size_t *payloadSize) {
                             free(discCmd);
                             free(rr0Cmd);
                             free(rr1Cmd);
+                            free(rej0Cmd);
+                            free(rej1Cmd);
                             errno = ENOMEM;
                             return NULL;
                         }
@@ -338,6 +371,8 @@ uint8_t* llread(size_t *payloadSize) {
                         free(discCmd);
                         free(rr0Cmd);
                         free(rr1Cmd);
+                        free(rej0Cmd);
+                        free(rej1Cmd);
                         return NULL;
                     }
                 }
@@ -352,6 +387,8 @@ uint8_t* llread(size_t *payloadSize) {
     free(discCmd);
     free(rr0Cmd);
     free(rr1Cmd);
+    free(rej0Cmd);
+    free(rej1Cmd);
     errno = ECONNABORTED;
     return NULL;
 }
@@ -477,36 +514,6 @@ static bool readCMD(uint8_t * C) {
 
     linkLayer.frameLength = 0;
 
-    size_t rej0CmdSize;
-    uint8_t *rej0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW, &rej0CmdSize, false);
-    if ( rej0Cmd == NULL ) {
-        errno = ENOMEM;
-        return false;
-    }
-    size_t rej1CmdSize;
-    uint8_t *rej1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW | 0x80, &rej1CmdSize, false);
-    if ( rej1Cmd == NULL ) {
-        free(rej0Cmd);
-        errno = ENOMEM;
-        return false;
-    }
-    size_t rr0CmdSize;
-    uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
-    if ( rej1Cmd == NULL ) {
-        free(rej0Cmd);
-        free(rej1Cmd);
-        errno = ENOMEM;
-        return false;
-    }
-    size_t rr1CmdSize;
-    uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
-    if ( rej1Cmd == NULL ) {
-        free(rej0Cmd);
-        free(rej1Cmd);
-        free(rr0Cmd);
-        errno = ENOMEM;
-        return false;
-    }
     // Não sei se isto tem um problema, imagina o seguinte:
     // O emissor envia uma trama com erro, como ele espera até receber
     // a resposta (e como não envia nada enquanto) não vai haver nada para ler
@@ -561,7 +568,7 @@ static bool readCMD(uint8_t * C) {
 				fprintf(stderr, "Received CMD: ");
 				print_cmd(*C);
 				fprintf(stderr, "\n");
-				goto Successed;
+                return true;
 			} else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
 				linkLayer.frame[linkLayer.frameLength++] = F;
 				linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
@@ -593,24 +600,10 @@ static bool readCMD(uint8_t * C) {
 					linkLayer.frame[linkLayer.frameLength++] = ch;
 					printf("Received Frame I, Length: %lu",
 							linkLayer.frameLength);
-					goto Successed;
-				} else { // Uma vez que tem o cabeçalho da header válido
-                    // Rej
-                    if ( linkLayer.sequenceNumber == (linkLayer.frame[2] >> 6) ) {
-                        if (linkLayer.sequenceNumber)
-                            res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
-                        else
-                            res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
-                    // RR
-                    } else {
-                        if (linkLayer.sequenceNumber)
-                            res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                        else
-                            res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    }
-					linkLayer.frameLength = 0;
-					state = F_RCV;
 				}
+                // Uma vez que tem o cabeçalho da header válido
+                // Rej e RR, fora ele verifica se o último elemento é F ou não
+                return true;
 			} else if (stuffing) {	//Destuffing in run-time
 				stuffing = false;
                 temp = ch ^ STUFFING_XOR_BYTE;
@@ -624,22 +617,11 @@ static bool readCMD(uint8_t * C) {
             }
 			break;
         default:
-            goto Failed;
+            return false;
             break;
 		}
 	}
-Failed:
-    free(rej0Cmd);
-    free(rej1Cmd);
-    free(rr0Cmd);
-    free(rr1Cmd);
     return false;
-Successed:
-    free(rej0Cmd);
-    free(rej1Cmd);
-    free(rr0Cmd);
-    free(rr1Cmd);
-    return true;
 }
 
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
