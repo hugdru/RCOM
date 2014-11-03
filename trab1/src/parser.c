@@ -126,6 +126,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
         Bundles[i]->alSettings.status = STATUS_UNSET;
         Bundles[i]->alSettings.io.fptr = NULL;
         Bundles[i]->alSettings.packetBodySize = DEFAULT_PACKETBODY_SIZE;
+        Bundles[i]->alSettings.fileName = NULL;
         Bundles[i]->name = NULL;
     }
 

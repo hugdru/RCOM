@@ -40,6 +40,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "numAttempts: %d\n", Bundles[i]->llSettings.numAttempts);
         fprintf(stderr, "status: %d\n", Bundles[i]->alSettings.status);
         fprintf(stderr, "packetBodySize: %lu\n", Bundles[i]->alSettings.packetBodySize);
+        if ( Bundles[i]->alSettings.fileName != NULL )
+            fprintf(stderr, "fileName: %s\n", Bundles[i]->alSettings.fileName);
     }
 
     llinitialize(&Bundles[0]->llSettings,IS_RECEIVER(Bundles[0]->alSettings.status)); // testing
