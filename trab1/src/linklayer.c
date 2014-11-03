@@ -254,7 +254,7 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
 
     size_t rr1CmdSize;
-    uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | (1 << 6), &rr1CmdSize, false);
+    uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
 
     if ( uaCmd == NULL ) {
         errno = ENOMEM;
@@ -322,7 +322,7 @@ uint8_t* llread(size_t *payloadSize) {
                         if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
                         else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                         fprintf(stderr, "Trama duplicada");
-                    } else if ( C == C_DISC && ((previousC == C_I_RAW) ) ) { // Transmitter já enviou tudo
+                    } else if ( C == C_DISC && (previousC == C_I_RAW) ) { // Transmitter já enviou tudo
                         blockedIFramesOnValidDisconnect = true;
                     } else { // Recebeu uma trama de supervisão ou não numerada válida mas não esperada, ruído tramado!
                         if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
@@ -477,6 +477,42 @@ static bool readCMD(uint8_t * C) {
 
     linkLayer.frameLength = 0;
 
+    size_t rej0CmdSize;
+    uint8_t *rej0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW, &rej0CmdSize, false);
+    if ( rej0Cmd == NULL ) {
+        errno = ENOMEM;
+        return false;
+    }
+    size_t rej1CmdSize;
+    uint8_t *rej1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW | 0x80, &rej1CmdSize, false);
+    if ( rej1Cmd == NULL ) {
+        free(rej0Cmd);
+        errno = ENOMEM;
+        return false;
+    }
+    size_t rr0CmdSize;
+    uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
+    if ( rej1Cmd == NULL ) {
+        free(rej0Cmd);
+        free(rej1Cmd);
+        errno = ENOMEM;
+        return false;
+    }
+    size_t rr1CmdSize;
+    uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
+    if ( rej1Cmd == NULL ) {
+        free(rej0Cmd);
+        free(rej1Cmd);
+        free(rr0Cmd);
+        errno = ENOMEM;
+        return false;
+    }
+    // Não sei se isto tem um problema, imagina o seguinte:
+    // O emissor envia uma trama com erro, como ele espera até receber
+    // a resposta (e como não envia nada enquanto) não vai haver nada para ler
+    // por isso ele vai esperar nesta função algum tempo desnecessariamente até tocar o alarm.
+    // Uma maneira de resolver era adicionar um parâmetro que indicava o comando a reenviar em caso de erro
+    // Não vou fazer isto por enquanto pq muda o prototipo e não quero estar a confundir as coisas
 	while (!alarmed) {
 		res = read(linkLayer.serialFileDescriptor, &ch, 1);
 		fprintf(stderr, "State: %d     Res: %lu\n", state, res);
@@ -508,13 +544,14 @@ static bool readCMD(uint8_t * C) {
 		case C_RCV:
 			if (stuffing) {	//Destuffing in run-time
 				stuffing = false;
-				if ((ch ^ STUFFING_XOR_BYTE) == BCC1)
+				if ((ch ^ STUFFING_XOR_BYTE) == BCC1) {
 					state = BCC_OK;
-			} else if (ch == ESC)
+                }
+			} else if (ch == ESC) {
 				stuffing = true;
-			else if (ch == BCC1)
+            } else if (ch == BCC1) {
 				state = BCC_OK;
-			else if (ch == F)
+            } else if (ch == F)
 				state = F_RCV;
 			else
 				state = START;
@@ -524,8 +561,8 @@ static bool readCMD(uint8_t * C) {
 				fprintf(stderr, "Received CMD: ");
 				print_cmd(*C);
 				fprintf(stderr, "\n");
-				return true;
-			} else if (isCMDI(*C) && ch != F) {
+				goto Successed;
+			} else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
 				linkLayer.frame[linkLayer.frameLength++] = F;
 				linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
 				linkLayer.frame[linkLayer.frameLength++] = *C;
@@ -556,10 +593,21 @@ static bool readCMD(uint8_t * C) {
 					linkLayer.frame[linkLayer.frameLength++] = ch;
 					printf("Received Frame I, Length: %lu",
 							linkLayer.frameLength);
-					return true;
-				} else {
-                    // Usar o rej aqui?
-
+					goto Successed;
+				} else { // Uma vez que tem o cabeçalho da header válido
+                    // Rej
+                    if ( linkLayer.sequenceNumber == (linkLayer.frame[2] >> 6) ) {
+                        if (linkLayer.sequenceNumber)
+                            res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
+                        else
+                            res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
+                    // RR
+                    } else {
+                        if (linkLayer.sequenceNumber)
+                            res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                        else
+                            res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    }
 					linkLayer.frameLength = 0;
 					state = F_RCV;
 				}
@@ -576,12 +624,22 @@ static bool readCMD(uint8_t * C) {
             }
 			break;
         default:
-            return false;
+            goto Failed;
             break;
 		}
 	}
-
-	return false; //Falhou
+Failed:
+    free(rej0Cmd);
+    free(rej1Cmd);
+    free(rr0Cmd);
+    free(rr1Cmd);
+    return false;
+Successed:
+    free(rej0Cmd);
+    free(rej1Cmd);
+    free(rr0Cmd);
+    free(rr1Cmd);
+    return true;
 }
 
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
