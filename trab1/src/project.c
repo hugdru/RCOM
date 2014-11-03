@@ -2,6 +2,7 @@
 #include "applayer.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "linklayer.h" // So para tests
 
@@ -15,7 +16,8 @@ size_t NBundles = 0;
 
 int main(int argc, char *argv[])
 {
-    int i = 0;
+    size_t i = 0;
+    uint8_t stringy[20] = "Olá macaco";
 
     Bundles = parse_args(argc, argv, &NBundles);
     if ( Bundles == NULL) {
@@ -25,7 +27,7 @@ int main(int argc, char *argv[])
 
     // Testing
     printf("NBundles: %lu\n", NBundles);
-    for(i = 0; i < (int)NBundles; ++i) {
+    for(i = 0; i < NBundles; ++i) {
         if ( Bundles[i]->name != NULL)
             printf("Name: %s\n", Bundles[i]->name);
 
@@ -47,6 +49,20 @@ int main(int argc, char *argv[])
     	goto cleanUp; // testing
     }
     else printf("llopen() was successful\n");
+
+    size_t payloadSize;
+    uint8_t *data;
+
+    if ( IS_RECEIVER(Bundles[0]->alSettings.status) ) {
+        data = llread(&payloadSize);
+        fprintf(stderr, "data:\n");
+        for ( i = 0; i < payloadSize; ++i) {
+            fprintf(stderr, "%c",data[i] );
+        }
+    } else {
+        llwrite(stringy,10);
+    }
+
 
     if( llclose() < 0 )
     	printf("llclose() was unsuccessful\n");
