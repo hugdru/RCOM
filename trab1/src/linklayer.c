@@ -321,69 +321,61 @@ uint8_t* llread(size_t *payloadSize) {
                 } else blockedSet = true;
             }
             if (blockedSet) {
-                if (!blockedIFramesOnValidDisconnect) {
-                    /* Trata do caso do header da tramaI estiver certo mas o body estiver errado */
-                    if ( (C == (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
-                        // rej
-                        fprintf(stderr, "Cabeça da trama I boa, resto mau, mesma sequência -> rej\n");
-                        if (linkLayer.sequenceNumber)
-                            res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
-                        else
-                            res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
-                    } else if ( (C != (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
-                        // rr
-                        fprintf(stderr, "Cabeça da trama I boa, resto mau, sequência diferente -> rr\n");
-                        if (linkLayer.sequenceNumber)
-                            res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                        else
-                            res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    /* Fim de caso especial header certo mas body errado */
-                    } else if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I esperada
-                        tempSize = linkLayer.frameLength - 6;
-                        payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
-                        if ( payloadToReturn == NULL ) {
-                            free(uaCmd);
-                            free(discCmd);
-                            free(rr0Cmd);
-                            free(rr1Cmd);
-                            free(rej0Cmd);
-                            free(rej1Cmd);
-                            errno = ENOMEM;
-                            return NULL;
-                        }
-                        for (i = 0; i < tempSize; ++i) {
-                            payloadToReturn[i] = linkLayer.frame[i+4];
-                        }
-                        *payloadSize = tempSize;
-                        linkLayer.sequenceNumber = changeSequenceNumber();
-                        if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                        else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                        return payloadToReturn;
-                    } else if ( C != (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
-                        if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                        else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                        fprintf(stderr, "Trama duplicada");
-                    } else if ( C == C_DISC && (previousC == C_I_RAW) ) { // Transmitter já enviou tudo
-                        blockedIFramesOnValidDisconnect = true;
-                    } else { // Recebeu uma trama de supervisão ou não numerada válida mas não esperada, ruído tramado!
-                        if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                        else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
-                        fprintf(stderr, "Não esperava esta trama");
-                    }
-                }
-                if (blockedIFramesOnValidDisconnect) {
-                    if ( C != C_UA ) { // Transmitter já enviou tudo, recebeu DISC
-                        res = write(linkLayer.serialFileDescriptor,discCmd,discCmdSize);
-                    } else { // Indica que já não há nada a receber, recebeu UA
-                        fprintf(stderr, "Recebeu o UA que indica terminação conexão\n");
+                /* Trata do caso do header da tramaI estiver certo mas o body estiver errado */
+                if ( (C == (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
+                    // rej
+                    fprintf(stderr, "Cabeça da trama I boa, resto mau, mesma sequência -> rej\n");
+                    if (linkLayer.sequenceNumber)
+                        res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
+                } else if ( (C != (C_I_RAW | (linkLayer.sequenceNumber << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) {
+                    // rr
+                    fprintf(stderr, "Cabeça da trama I boa, resto mau, sequência diferente -> rr\n");
+                    if (linkLayer.sequenceNumber)
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                /* Fim de caso especial header certo mas body errado */
+                } else if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I esperada
+                    fprintf(stderr, "Trama I esperada\n");
+                    tempSize = linkLayer.frameLength - 6;
+                    payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
+                    if ( payloadToReturn == NULL ) {
                         free(uaCmd);
                         free(discCmd);
                         free(rr0Cmd);
                         free(rr1Cmd);
                         free(rej0Cmd);
                         free(rej1Cmd);
+                        errno = ENOMEM;
                         return NULL;
                     }
+                    for (i = 0; i < tempSize; ++i) {
+                        payloadToReturn[i] = linkLayer.frame[i+4];
+                    }
+                    *payloadSize = tempSize;
+                    linkLayer.sequenceNumber = changeSequenceNumber();
+                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    return payloadToReturn;
+                } else if ( C != (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
+                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    fprintf(stderr, "Trama duplicada");
+                } else if ( C == C_DISC && (previousC == C_I_RAW) ) { // Transmitter já enviou tudo
+                    fprintf(stderr, "LLread received valid disconnect\n");
+                    free(uaCmd);
+                    free(discCmd);
+                    free(rr0Cmd);
+                    free(rr1Cmd);
+                    free(rej0Cmd);
+                    free(rej1Cmd);
+                    return NULL;
+                } else { // Recebeu uma trama de supervisão ou não numerada válida mas não esperada, ruído tramado!
+                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    fprintf(stderr, "Não esperava esta trama");
                 }
             }
         }

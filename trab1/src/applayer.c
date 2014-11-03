@@ -18,11 +18,6 @@
 
 typedef struct {
     long int fileSize;
-    unsigned char * fileName;
-} FileInfo;
-
-typedef struct {
-    FileInfo * fileInfo;
     AppLayerSettings * settings;
 } AppLayer;
 
@@ -64,10 +59,12 @@ static int writeDataPacket(uint8_t *data, size_t size);
 /**
  * @desc Sends message/file to the receiver
  */
-static void write(void);
+static int write(void);
 
 
 int initAppLayer(Bundle *bundle) {
+
+    int res;
 
     if(bundle == NULL) {
         fprintf(stderr, "Error: bundle is null\n");
@@ -76,19 +73,22 @@ int initAppLayer(Bundle *bundle) {
     }
 
     appLayer.settings = &bundle->alSettings;
+    appLayer.fileSize = 0;
 
     if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
-        if(appLayer.settings->io.fptr == NULL) {
-                fprintf(stderr, "Error opening file '%s'\n", appLayer.fileInfo->fileName);
-                return -1;
-        }
-
         if( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
-             fclose(appLayer.settings->io.fptr);
-             fprintf(stderr, "Error: Cant's find file '%s' size", appLayer.fileInfo->fileName);
-             return -1;
+            fclose(appLayer.settings->io.fptr);
+            if ( appLayer.settings->fileName != NULL ) {
+                fprintf(stderr, "Error: Cant's find file '%s' size", appLayer.settings->fileName);
+            } else fprintf(stderr, "appLayer.settings->fileName is set to Null in TRANSMITTER_FILE mode");
+            return -1;
         }
-        long int fileSize = ftell(appLayer.settings->io.fptr);
+        appLayer.fileSize = ftell(appLayer.settings->io.fptr);
+    } else if (appLayer.settings->status == STATUS_RECEIVER_FILE ) {
+        if ( appLayer.settings->fileName == NULL ) {
+            fprintf(stderr, "appLayer.settings->fileName is set to Null in RECEIVER_FILE mode");
+            return -1;
+        }
     }
 
     llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
@@ -97,12 +97,22 @@ int initAppLayer(Bundle *bundle) {
         fprintf(stderr, "Error: llopen()\n");
         exit(1);
     }
-    else printf("llopen() was successful\n");
+    else fprintf(stderr, "llopen() was successful\n");
 
     fprintf(stderr, "After llopen()\n");
-    if(IS_RECEIVER(appLayer.settings->status))
-        read();
-    else write();
+    if(IS_RECEIVER(appLayer.settings->status)) {
+        res = read();
+        if ( res != 0 ) {
+            fprintf(stderr, "There was an error in applayer read function\n");
+            return -1;
+        }
+    } else {
+        res = write();
+        if ( res != 0 ) {
+            fprintf(stderr, "There was an error in applayer write function\n");
+            return -1;
+        }
+    }
 
     return 0;
 }
@@ -138,10 +148,10 @@ static int parserPacket(uint8_t* packet, size_t size) {
 
             switch(type) {
                 case TYPE_FILESIZE:
-                    appLayer.fileInfo->fileSize = (int) value; // fileSize is in AppLayer
+                    appLayer.fileSize = (int) value; // fileSize is in AppLayer
                     break;
                 case TYPE_FILENAME:
-                    appLayer.fileInfo->fileName = value;
+                    appLayer.settings->fileName = value;
                     appLayer.settings->io.fptr = fopen(value, "w"); //Creates a file, if exists erases the content first
                     if (appLayer.settings->io.fptr == NULL) {
                         fprintf(stderr, "Error opening file '%s'\n", value);
@@ -189,7 +199,7 @@ static int read(void) {
 }
 
 static int writeStartPacket(void) {
-    size_t filenameLength = strlen(appLayer.fileInfo->fileName);
+    size_t filenameLength = strlen(appLayer.settings->fileName);
 
     size_t packetSize = filenameLength + 9; //1 byte do type, 2 para cada parametro para o TL e fileSizeLength e filenameLength
     uint8_t packet[packetSize];
@@ -212,7 +222,7 @@ static int writeDataPacket(uint8_t *data, size_t size) {
     return llwrite(packet, strlen(packet));
 }
 
-static void write(void) {
+static int write(void) {
     size_t res;
     bool end = false;
     uint8_t data[appLayer.settings->packetBodySize];

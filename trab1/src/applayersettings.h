@@ -13,6 +13,7 @@
 typedef struct {
     int status;
     size_t packetBodySize;
+    char *fileName;
 
     union Io {
         char * chptr;

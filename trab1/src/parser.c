@@ -83,6 +83,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
     size_t numberOfSeparators = 0;
     size_t i;
     unsigned long parsedNumber;
+    char *ptr;
     /*regex_t deviceRegex;*/
     Bundle **Bundles;
 
@@ -210,6 +211,11 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                     return NULL;
                 }
                 Bundles[i]->alSettings.status = STATUS_TRANSMITTER_FILE;
+                ptr = strrchr(optarg, '/');
+                if (ptr == NULL)
+                    ptr = optarg;
+                else
+                    ++ptr;
                 break;
             case 'R':
                 if ((Bundles[i]->alSettings.io.fptr = fopen(optarg, "w+b"))
@@ -218,6 +224,11 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                     return NULL;
                 }
                 Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE;
+                ptr = strrchr(optarg, '/');
+                if (ptr == NULL)
+                    ptr = optarg;
+                else
+                    ++ptr;
                 break;
             case 'm':
                 Bundles[i]->alSettings.io.chptr = optarg;
