@@ -248,7 +248,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                 Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
                 break;
             case 'D':
-                Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
+                Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE_RECEIVED_NAME;
                 break;
             default:
                 errno = EINVAL;
