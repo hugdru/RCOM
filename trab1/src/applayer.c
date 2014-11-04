@@ -279,10 +279,23 @@ static int writeEndPacket(void) {
 }
 
 static int writeDataPacket(uint8_t *data, size_t size) {
-    uint8_t packet[appLayer.settings->packetBodySize + 4];
-
-    sprintf(packet,"%X%X%X%X%s", C_DATA, 1, size/256, size%256, data);
-    fprintf(stderr, "DataPacket: %s\n", packet);
+    uint8_t packet[size + 4];
+    
+    uint8_t L2 = size/256, L1 = size%256;
+    
+    fprintf(stderr, "%X", size%256);
+    return 0;
+    memcpy(packet, C_DATA, 1);
+    memcpy(packet+1, L2, 1);
+    memcpy(packet+2, L1, 1);
+    memcpy(packet+3, data, size);
+    int i = 0;
+    for(; i < size+4; i++)
+     fprintf(stderr, "%X", packet[i]);
+     
+    return 0;
+    //fprintf(stderr, "Size: %d %X   L2: %d %X  L1: %d %X\n", size, size/256, size%256);
+    //fprintf(stderr, "DataPacket: %s\n", packet);
     return llwrite(packet, strlen(packet));
 }
 
