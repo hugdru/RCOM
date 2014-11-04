@@ -84,7 +84,6 @@ int initAppLayer(Bundle *bundle) {
 
     if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
         if ( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
-            fclose(appLayer.settings->io.fptr);
             if ( appLayer.settings->fileName != NULL ) {
                 fprintf(stderr, "Error: Cant's find file '%s' size", appLayer.settings->fileName);
             } else fprintf(stderr, "appLayer.settings->fileName is set to Null in TRANSMITTER_FILE mode");
@@ -103,7 +102,7 @@ int initAppLayer(Bundle *bundle) {
 
     llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
 
-    if ( llopen() < 0 ) {
+    if ( llopen() != 0 ) {
         fprintf(stderr, "Error: llopen()\n");
         return -1;
     }
@@ -129,6 +128,9 @@ int initAppLayer(Bundle *bundle) {
         fprintf(stderr, "Error: llclose()\n");
         return -1;
     }
+
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE || appLayer.settings->status == STATUS_RECEIVER_FILE ) fclose(appLayer.settings->io.fptr);
+
     else fprintf(stderr, "llclose() was successful\n");
 
     return 0;
@@ -250,7 +252,7 @@ static int write(void) {
             }
         } else if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING ) {
             if ( (res = stringSize - lidos) <= appLayer.settings->packetBodySize ) {
-                memcpy(data, appLayer.settings->io.chptr+lidos, stringSize-lidos);
+                memcpy(data, appLayer.settings->io.chptr+lidos, res);
                 fprintf(stderr, "AppWrite Reached end of string\n");
                 end = true;
             } else {
@@ -266,7 +268,7 @@ static int write(void) {
         }
         if ( res != 0 ) {
             if ( writeDataPacket(data, res) == -1 ) {
-                fprintf(stderr, "AppWrite Number of bytes written so far: %lu\n", databytesWritten);
+                fprintf(stderr, "AppWrite Number of data bytes written so far: %lu\n", databytesWritten);
                 fprintf(stderr, "AppWrite failed\n");
                 return -1;
             }
@@ -280,7 +282,6 @@ static int write(void) {
         return -1;
     }
 
-    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) fclose(appLayer.settings->io.fptr);
     fprintf(stderr, "\n\nAppWrite Number of bytes Written: %lu\n\n", databytesWritten);
     return 0;
 }
@@ -300,11 +301,10 @@ static int writeStartPacket(void) {
     packet[1] = TYPE_FILENAME; // T
     packet[2] = filenameLength; // V
 
-    uint8_t i;
-    uint16_t t;
+    size_t i;
 
-    for (i = 0, t = 3; i < filenameLength; ++i) {
-        packet[t++] = appLayer.settings->fileName[i];
+    for (i = 0; i < filenameLength; ++i) {
+        packet[i+3] = appLayer.settings->fileName[i];
     }
 
     return llwrite(packet, packetSize);
@@ -312,6 +312,7 @@ static int writeStartPacket(void) {
 
 static int writeDataPacket(uint8_t *data, size_t size) {
     uint8_t packet[size + 4];
+    size_t i;
 
     if ( data == NULL || size < 5) {
         errno = EINVAL;
@@ -321,7 +322,7 @@ static int writeDataPacket(uint8_t *data, size_t size) {
     uint8_t L2 = size/256, L1 = size%256;
 
     fprintf(stderr, "Going to writeDataPacket\n");
-    fprintf(stderr, "%lu", size%256);
+    fprintf(stderr, "size: %lu L2: %d L1: %d\n", size, L2, L1);
     packet[0] = C_DATA;
     if ( appLayer.sequenceNumber == 256 ) appLayer.sequenceNumber = 0;
     packet[1] = appLayer.sequenceNumber;
@@ -329,7 +330,7 @@ static int writeDataPacket(uint8_t *data, size_t size) {
     packet[3] = L1;
     memcpy(packet+4, data, size);
 
-    for(size_t i = 0; i < size+4; ++i)
+    for (i = 0; i < size+4; ++i)
         fprintf(stderr, "%X", packet[i]);
 
     //fprintf(stderr, "Size: %d %X   L2: %d %X  L1: %d %X\n", size, size/256, size%256);
@@ -338,10 +339,8 @@ static int writeDataPacket(uint8_t *data, size_t size) {
     if ( err == 0 ) {
         ++appLayer.sequenceNumber;
         return 0;
-    } else {
-        return -1;
     }
-    return llwrite(packet, size+4);
+    return -1;
 }
 
 static int writeEndPacket(void) {
@@ -354,10 +353,9 @@ static int writeEndPacket(void) {
     packet[2] = sizeof(uint32_t); // V
 
     uint8_t i;
-    uint16_t t;
 
-    for (i = 0, t = 3; i < sizeof(uint32_t); ++i) {
-        packet[t++] = (appLayer.fileSize >> 8*i) & 0xFF;
+    for (i = 0; i < sizeof(uint32_t); ++i) {
+        packet[i+3] = (appLayer.fileSize >> 8*i) & 0xFF;
     }
 
     return llwrite(packet, packetSize);

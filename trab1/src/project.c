@@ -17,7 +17,6 @@ size_t NBundles = 0;
 int main(int argc, char *argv[])
 {
     size_t i = 0;
-    uint8_t stringy[20] = "OlaMacaco";
 
     Bundles = parse_args(argc, argv, &NBundles);
     if ( Bundles == NULL) {
@@ -44,19 +43,18 @@ int main(int argc, char *argv[])
             fprintf(stderr, "fileName: %s\n", Bundles[i]->alSettings.fileName);
     }
 
-    llinitialize(&Bundles[0]->llSettings,IS_RECEIVER(Bundles[0]->alSettings.status)); // testing
+    /*llinitialize(&Bundles[0]->llSettings,IS_RECEIVER(Bundles[0]->alSettings.status)); // testing*/
 
-    if ( llopen() < 0 ) {
-        fprintf(stderr, "llopen() was unsuccessful\n");
-        goto cleanUp; // testing
-    }
-    else fprintf(stderr, "llopen() was successful\n");
+    /*if ( llopen() != 0 ) {*/
+        /*fprintf(stderr, "llopen() was unsuccessful\n");*/
+        /*goto cleanUp; // testing*/
+    /*}*/
+    /*else fprintf(stderr, "llopen() was successful\n");*/
 
-    size_t payloadSize;
-    uint8_t *data;
-
-  if( initAppLayer(Bundles[0]) < 0)
+    if( initAppLayer(Bundles[0]) != 0) {
+        if ( Bundles[0]->alSettings.status == STATUS_TRANSMITTER_FILE || Bundles[0]->alSettings.status == STATUS_RECEIVER_FILE ) fclose(Bundles[0]->alSettings.io.fptr);
         fprintf(stderr, "Error: Initializing app layer\n");
+    }
     return 0;
 
 cleanUp:
