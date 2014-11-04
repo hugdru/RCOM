@@ -79,7 +79,6 @@ LinkLayer linkLayer;
 
 int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 
-
     if (blocked) {
         fprintf(stderr, "You can only initialize once\n");
         return -1;
@@ -184,6 +183,8 @@ int llopen(void) {
     else
         cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_SET, &cmdSize, false);
 
+    if ( cmd == NULL ) return -1;
+
     while (tries < linkLayer.settings->numAttempts) {
         alarmed = false;
         if (linkLayer.is_receiver) {
@@ -191,14 +192,17 @@ int llopen(void) {
             received = readCMD(&C);
             if (received && C == C_SET) {
                 res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
+                free(cmd);
                 return 0;
             }
         } else {
             res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
             alarm(linkLayer.settings->timeout);
             received = readCMD(&C);
-            if (received && C == C_UA)
+            if (received && C == C_UA) {
+                free(cmd);
                 return 0;
+            }
         }
 
         tries++;
@@ -208,19 +212,22 @@ int llopen(void) {
     if (tcsetattr(linkLayer.serialFileDescriptor, TCSANOW, &(linkLayer.oldtio))
             < 0) { /* Restores old port settings */
         perror("tcsetattr");
-        exit(1);
+        free(cmd);
+        return -1;
     }
 
     close(linkLayer.serialFileDescriptor);
+    free(cmd);
     return -1;
 }
 
 int llwrite(uint8_t *packet, size_t packetSize) {
     size_t stuffedFrameSize;
     uint8_t * stuffedFrame = buildIFrame(packet, packetSize, &stuffedFrameSize);
+    if ( stuffedFrame == NULL ) return -1;
 
     unsigned int tries = 0;
-    bool received, done = false;
+    bool received;
     ssize_t res;
     uint8_t C;
 
@@ -241,6 +248,7 @@ int llwrite(uint8_t *packet, size_t packetSize) {
             if ( C == (C_RR_RAW | (linkLayer.sequenceNumber << 7)) ) { // RR Errado
             } else if ( C == (C_RR_RAW | (changeSequenceNumber() << 7)) ) { // RR Certo
                 linkLayer.sequenceNumber = changeSequenceNumber();
+                free(stuffedFrame);
                 return 0;
             } else if ( C == (C_REJ_RAW | (linkLayer.sequenceNumber << 7)) ) { //REJ Certo
             } else if ( C == (C_REJ_RAW | (linkLayer.sequenceNumber << 7)) ) {//REJ Errado
@@ -251,22 +259,15 @@ int llwrite(uint8_t *packet, size_t packetSize) {
         tries++;
     }
 
-    fprintf(stderr, "LLWRITE\n");
-    return 1;
+    fprintf(stderr, "LLWRITE error\n");
+    free(stuffedFrame);
+    return -1;
 }
 
 // errno != 0 em caso de erro
 // retorna NULL e errno = 0, se receber disconnect e depois um UA para a applayer depois fazer llclose
 // retorna endereço do pacote, *packetSize tamanho do pacote recebido
 uint8_t* llread(size_t *payloadSize) {
-
-    unsigned int tries = 0;
-    bool received;
-    ssize_t res;
-    uint8_t C;
-    uint8_t previousC;
-    uint8_t *payloadToReturn;
-    size_t i, tempSize;
 
     size_t uaCmdSize;
     uint8_t *uaCmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &uaCmdSize, false);
@@ -308,6 +309,14 @@ uint8_t* llread(size_t *payloadSize) {
         errno = ENOMEM;
         return NULL;
     }
+
+    unsigned int tries = 0;
+    bool received;
+    ssize_t res;
+    uint8_t C;
+    uint8_t previousC;
+    uint8_t *payloadToReturn;
+    size_t i, tempSize;
 
     errno = 0;
 
@@ -456,6 +465,8 @@ int llclose(void) {
     if (success) {
         if (tcsetattr(linkLayer.serialFileDescriptor, TCSANOW, &(linkLayer.oldtio)) < 0) {
             perror("tcsetattr");
+            free(UA);
+            free(DISC);
             return -1;
         }
         if ( close(linkLayer.serialFileDescriptor) != 0 ) return -1;
@@ -463,8 +474,14 @@ int llclose(void) {
         success = false;
         free(new_act);
         new_act = NULL;
+        free(UA);
+        free(DISC);
         return 0;
-    } else return -1;
+    } else {
+        free(UA);
+        free(DISC);
+        return -1;
+    }
 }
 
 /**
@@ -663,6 +680,11 @@ static bool readCMD(uint8_t * C) {
 static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
     *stuffedSize = size+1;
 
+    if ( size == 0 || stuffedSize == NULL || packet == NULL ) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     uint8_t BCC = generateBcc(packet, size);
 
     size_t i;
@@ -675,6 +697,10 @@ static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
         (*stuffedSize)++;
 
     uint8_t * stuffed = (uint8_t *) malloc(*stuffedSize);
+    if ( stuffed == NULL ) {
+        errno = ENOMEM;
+        return NULL;
+    }
 
     size_t j = 0;
     for (i = 0; i < size; ++i) {
@@ -688,16 +714,23 @@ static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
 
     if(BCC == ESC || BCC == F) {
         stuffed[j++] = ESC;
-        stuffed[j++] = BCC ^ STUFFING_XOR_BYTE;
+        stuffed[j] = BCC ^ STUFFING_XOR_BYTE;
           /*fprintf(stderr, "\n\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n\nStuff: Estava: %X, ficou: %X %X\n", BCC, ESC, (STUFFING_XOR_BYTE ^BCC));*/
+    } else {
+        stuffed[j] = BCC;
     }
-    stuffed[j++] = BCC;
 
     return stuffed;
 }
 
 static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t *headerSize,
         bool is_IframeHead) {
+
+    if ( headerSize == NULL ) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     size_t size = 4;
     bool stuffed = false;
 
@@ -712,6 +745,10 @@ static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t *headerSize,
         size++;
 
     uint8_t *header = (uint8_t *) malloc(size);
+    if ( header == NULL ) {
+        errno = ENOMEM;
+        return NULL;
+    }
 
     uint8_t i = 0;
     header[i++] = F;
@@ -732,31 +769,54 @@ static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t *headerSize,
 
 static uint8_t * buildIFrame(uint8_t * packet, size_t packetSize,
         size_t * stuffedFrameSize) {
+
+    if ( packet == NULL || stuffedFrameSize == NULL ) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     size_t stuffedHeaderSize;
     uint8_t * stuffedHeader = buildFrameHeader(A_CSENDER_RRECEIVER,
             (linkLayer.sequenceNumber << 6), &stuffedHeaderSize, true);
-
+    if ( stuffedHeader == NULL ) {
+        errno = ENOMEM;
+        return NULL;
+    }
     size_t stuffedPacketSize;
     uint8_t * stuffedPacket = stuff(packet, packetSize, &stuffedPacketSize);
-
+    if ( stuffedPacket == NULL ) {
+        free(stuffedHeader);
+        errno = ENOMEM;
+        return NULL;
+    }
     *stuffedFrameSize = stuffedHeaderSize + stuffedPacketSize + 1; //Header + Packet + F
     uint8_t * stuffedFrame = (uint8_t *) malloc(*stuffedFrameSize);
+    if ( stuffedFrame == NULL ) {
+        free(stuffedHeader);
+        free(stuffedPacket);
+        errno = ENOMEM;
+        return NULL;
+    }
 
     memcpy(stuffedFrame, stuffedHeader, stuffedHeaderSize);
     memcpy(stuffedFrame + stuffedHeaderSize, stuffedPacket, stuffedPacketSize);
+    free(stuffedHeader);
+    free(stuffedPacket);
+
     stuffedFrame[*stuffedFrameSize - 1] = F;
 
     return stuffedFrame;
 }
 
 static uint8_t generateBcc(const uint8_t * data, size_t size) {
-    size_t i;
-    uint8_t bcc = 0x00;
 
     if (data == NULL) {
         errno = EINVAL;
         return 0;
     }
+
+    size_t i;
+    uint8_t bcc = 0x00;
 
     for (i = 0; i < size; ++i)
         bcc ^= data[i];

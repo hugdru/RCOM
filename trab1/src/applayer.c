@@ -17,6 +17,7 @@
 #define TYPE_FILENAME 1
 
 typedef struct {
+    int sequenceNumber;
     long int fileSize;
     AppLayerSettings * settings;
 } AppLayer;
@@ -66,17 +67,23 @@ int initAppLayer(Bundle *bundle) {
 
     int res;
 
-    if(bundle == NULL) {
+    if ( bundle == NULL ) {
         fprintf(stderr, "Error: bundle is null\n");
         errno = EINVAL;
         return 1;
     }
 
+    if ( bundle->alSettings.packetBodySize > (256 * 255 + 255) ) {
+        fprintf(stderr, "packetBodySize exceeds the maximum supported value");
+        errno = EINVAL;
+        return -1;
+    }
+
     appLayer.settings = &bundle->alSettings;
     appLayer.fileSize = 0;
 
-    if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
-        if( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
+        if ( fseek(appLayer.settings->io.fptr, 0, SEEK_END) ){
             fclose(appLayer.settings->io.fptr);
             if ( appLayer.settings->fileName != NULL ) {
                 fprintf(stderr, "Error: Cant's find file '%s' size", appLayer.settings->fileName);
@@ -89,17 +96,22 @@ int initAppLayer(Bundle *bundle) {
             fprintf(stderr, "appLayer.settings->fileName is set to Null in RECEIVER_FILE mode");
             return -1;
         }
+    } else if (appLayer.settings->status != STATUS_TRANSMITTER_STRING) {
+        fprintf(stderr, "Redirections and pipes are not implemented yet\n");
+        return -1;
     }
 
     llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
 
-    if( llopen() < 0) {
+    if ( llopen() < 0 ) {
         fprintf(stderr, "Error: llopen()\n");
         return -1;
     }
     else fprintf(stderr, "llopen() was successful\n");
 
-    if(IS_RECEIVER(appLayer.settings->status)) {
+    appLayer.sequenceNumber = 0;
+
+    if ( IS_RECEIVER(appLayer.settings->status) ) {
         res = read();
         if ( res != 0 ) {
             fprintf(stderr, "There was an error in applayer read function\n");
@@ -113,7 +125,7 @@ int initAppLayer(Bundle *bundle) {
         }
     }
 
-    if( llclose() < 0) {
+    if( llclose() != 0) {
         fprintf(stderr, "Error: llclose()\n");
         return -1;
     }
@@ -182,7 +194,7 @@ static int read(void) {
     size_t packetSize;
     size_t i;
 
-    while(1) {
+    while (1) {
         packet = llread(&packetSize);
         if ( errno != 0 ) {
             fprintf(stderr, "AppRead errno\n");
@@ -193,7 +205,7 @@ static int read(void) {
                 return 0;
             } else {
                 fprintf(stderr, "AppRead packet: ");
-                for(i = 0; i < packetSize; i++) {
+                for (i = 0; i < packetSize; i++) {
                     fprintf(stderr, "%c", packet[i]);
                 }
                 parserPacket(packet, packetSize);
@@ -206,94 +218,148 @@ static int read(void) {
 static int write(void) {
     size_t res;
     bool end = false;
-    uint8_t data[appLayer.settings->packetBodySize+10];
+    uint8_t data[appLayer.settings->packetBodySize];
     size_t stringSize, lidos = 0;
-    int numCharWritted = 0;
+    size_t databytesWritten = 0;
 
-    if(appLayer.settings->status == STATUS_TRANSMITTER_STRING)
-        stringSize = strlen(appLayer.settings->io.chptr);
-   else {
-        // writeStartPacket();
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING )
+        stringSize = strlen(appLayer.settings->io.chptr) + 1;
+    else if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
+        // Era uma boa ideia mandar aqui um pacote de controlo só com o nome do ficheiro e no fim o tamanho do ficheiro ou da string
+        // Assim já dava para usar das duas maneiras embora desse para mandar numa só tudo, no fim xor início
+        if ( writeStartPacket() != 0 ) {
+            fprintf(stderr, "writeStartPacket Failed\n");
+            return -1;
+        }
         rewind(appLayer.settings->io.fptr);
-   }
-
-    while(!end) {
-        if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
-            res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
-            fprintf(stderr, "AppWrite Res: %d\n", res);
-            fprintf(stderr, "AppWrite packet: %s\n", data);
-            if(res < appLayer.settings->packetBodySize)
-                end = true; // End of file
-        }
-
-        else if(appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
-            if(stringSize - lidos <  appLayer.settings->packetBodySize) {
-                memcpy(data, appLayer.settings->io.chptr+lidos, stringSize-lidos);
-                end = true;
-            }
-            else {
-                memcpy(data, appLayer.settings->io.chptr+lidos, appLayer.settings->packetBodySize);
-                lidos += appLayer.settings->packetBodySize;
-            }
-            fprintf(stderr, "AppWrite packet: %s\n", data);
-
-        }
-
-        else {
-            //Por fazer, ler stream
-        }
-
-        if( writeDataPacket(data, res) == 1) {
-             fprintf(stderr, "AppWrite Number of chars read so far: %d\n", numCharWritted);
-             fprintf(stderr, "AppWrite failed\n");
-             return -1;
-        }
-        numCharWritted += res;
     }
 
-    if(appLayer.settings->status == STATUS_TRANSMITTER_FILE)
-        writeEndPacket();
+    while ( !end ) {
+        if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
+            res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
+            if ( feof(appLayer.settings->io.fptr) ) {
+                fprintf(stderr, "AppWrite Reached end of file\n");
+                end = true;
+            } else if ( ferror(appLayer.settings->io.fptr) ) {
+                fprintf(stderr, "AppWrite error occurred in fread\n");
+                return -1;
+            } else {
+                fprintf(stderr, "AppWrite Res: %lu\n", res);
+                fprintf(stderr, "AppWrite packet: ");
+                fprintf(stderr, "%.*s\n", (int)res, data);
+            }
+        } else if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING ) {
+            if ( (res = stringSize - lidos) <= appLayer.settings->packetBodySize ) {
+                memcpy(data, appLayer.settings->io.chptr+lidos, stringSize-lidos);
+                fprintf(stderr, "AppWrite Reached end of string\n");
+                end = true;
+            } else {
+                memcpy(data, appLayer.settings->io.chptr+lidos, appLayer.settings->packetBodySize);
+                lidos += appLayer.settings->packetBodySize;
+                res = appLayer.settings->packetBodySize;
+            }
+            fprintf(stderr, "AppWrite packet: %s\n", data);
+        } else {
+            // Por fazer, ler stream
+            // Não vai chegar aqui porque retorna -1 no llinitialize
+            // Fiz dessa maneira pq talvez não vai dar tempo para implementar
+        }
+        if ( res != 0 ) {
+            if ( writeDataPacket(data, res) == -1 ) {
+                fprintf(stderr, "AppWrite Number of bytes written so far: %lu\n", databytesWritten);
+                fprintf(stderr, "AppWrite failed\n");
+                return -1;
+            }
+            databytesWritten += res;
+        }
+    }
 
-    fprintf(stderr, "\n\nAppWrite Number of chars Writted: %d\n\n", numCharWritted);
+    // Envia o tamanho do ficheiro ou da string
+    if ( writeEndPacket() != 0 ) {
+        fprintf(stderr, "writeEndPacket failed");
+        return -1;
+    }
+
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) fclose(appLayer.settings->io.fptr);
+    fprintf(stderr, "\n\nAppWrite Number of bytes Written: %lu\n\n", databytesWritten);
     return 0;
 }
 
 static int writeStartPacket(void) {
-    size_t filenameLength = strlen(appLayer.settings->fileName);
 
-    size_t packetSize = filenameLength + 9; //1 byte do type, 2 para cada parametro para o TL e fileSizeLength e filenameLength
+    size_t filenameLength = strlen(appLayer.settings->fileName) + 1;
+    if ( filenameLength > 256 || filenameLength == 1 ) {
+        fprintf(stderr, "writeStartPacket invalid fileName\n");
+        return -1;
+    }
+
+    size_t packetSize = 3 + filenameLength; //  C + T + L + Tamanho da string(V)
     uint8_t packet[packetSize];
 
-    //sprintf(packet, "%02x:%02x:%d%d%02x:%02zu:%s", C_START, TYPE_FILESIZE, (int) sizeof(int), appLayer.fileInfo->fileSize, TYPE_FILENAME, filenameLength, appLayer.fileInfo->fileName);
+    packet[0] = C_START; // C
+    packet[1] = TYPE_FILENAME; // T
+    packet[2] = filenameLength; // V
+
+    uint8_t i;
+    uint16_t t;
+
+    for (i = 0, t = 3; i < filenameLength; ++i) {
+        packet[t++] = appLayer.settings->fileName[i];
+    }
 
     return llwrite(packet, packetSize);
 }
 
-static int writeEndPacket(void) {
-    uint8_t packet = C_END;
-
-    return llwrite(&packet, 1);
-}
-
 static int writeDataPacket(uint8_t *data, size_t size) {
     uint8_t packet[size + 4];
-    
+
+    if ( data == NULL || size < 5) {
+        errno = EINVAL;
+        return -1;
+    }
+
     uint8_t L2 = size/256, L1 = size%256;
-    
-    fprintf(stderr, "%X", size%256);
-    return 0;
-    memcpy(packet, C_DATA, 1);
-    memcpy(packet+1, L2, 1);
-    memcpy(packet+2, L1, 1);
-    memcpy(packet+3, data, size);
-    int i = 0;
-    for(; i < size+4; i++)
-     fprintf(stderr, "%X", packet[i]);
-     
-    return 0;
+
+    fprintf(stderr, "Going to writeDataPacket\n");
+    fprintf(stderr, "%lu", size%256);
+    packet[0] = C_DATA;
+    if ( appLayer.sequenceNumber == 256 ) appLayer.sequenceNumber = 0;
+    packet[1] = appLayer.sequenceNumber;
+    packet[2] = L2;
+    packet[3] = L1;
+    memcpy(packet+4, data, size);
+
+    for(size_t i = 0; i < size+4; ++i)
+        fprintf(stderr, "%X", packet[i]);
+
     //fprintf(stderr, "Size: %d %X   L2: %d %X  L1: %d %X\n", size, size/256, size%256);
     //fprintf(stderr, "DataPacket: %s\n", packet);
-    return llwrite(packet, strlen(packet));
+    int err = llwrite(packet, size+4);
+    if ( err == 0 ) {
+        ++appLayer.sequenceNumber;
+        return 0;
+    } else {
+        return -1;
+    }
+    return llwrite(packet, size+4);
 }
 
+static int writeEndPacket(void) {
+
+    size_t packetSize = 3 + sizeof(uint32_t); //  C + T + L + bytes do tipo
+    uint8_t packet[packetSize];
+
+    packet[0] = C_END; // C
+    packet[1] = TYPE_FILESIZE; // T
+    packet[2] = sizeof(uint32_t); // V
+
+    uint8_t i;
+    uint16_t t;
+
+    for (i = 0, t = 3; i < sizeof(uint32_t); ++i) {
+        packet[t++] = (appLayer.fileSize >> 8*i) & 0xFF;
+    }
+
+    return llwrite(packet, packetSize);
+}
 
