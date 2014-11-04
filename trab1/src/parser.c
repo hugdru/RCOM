@@ -61,6 +61,7 @@ void print_usage(char **argv) {
     fprintf(stderr, "     > PathToFile\tReceive information and place it in a file\n");
     fprintf(stderr, "     -S  Path\t\tFile to send\n");
     fprintf(stderr, "     -R  Path\t\tWhere to place received file\n");
+    fprintf(stderr, "     -D  \t\tUse the fileName that comes in control packet start\n");
 
     fprintf(stderr, "\n--- Examples ---\n");
     fprintf(stderr, "%s -h\n", ptr);
@@ -156,7 +157,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
             return NULL;
         }
 
-        while ((c = getopt((int) subArgc, oldSubArgv, "N:b:d:t:r:n:S:R:m:f:s:xh"))
+        while ((c = getopt((int) subArgc, oldSubArgv, "N:b:d:t:r:n:S:R:m:f:s:xhD"))
                 != -1) {
 
             if (c == 'b' || c == 't' || c == 'r' || c == 'f' || c == 's') {
@@ -165,7 +166,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                     fprintf(stderr, "-%c must be followed by a number\n", c);
                     return NULL;
                 }
-            } else if (c == 'S' || c == 'R' || c == 'x' || c == 'm') {
+            } else if (c == 'S' || c == 'R' || c == 'x' || c == 'm' || c == 'D') {
                 if (ioSet) {
                     fprintf(stderr, "There can only be a mode for each tunnel");
                     return NULL;
@@ -244,6 +245,9 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                         (unsigned int) parsedNumber;
                 break;
             case 'x':
+                Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
+                break;
+            case 'D':
                 Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
                 break;
             default:

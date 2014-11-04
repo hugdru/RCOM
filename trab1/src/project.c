@@ -52,9 +52,16 @@ int main(int argc, char *argv[])
     /*else fprintf(stderr, "llopen() was successful\n");*/
 
     if( initAppLayer(Bundles[0]) != 0) {
-        if ( Bundles[0]->alSettings.status == STATUS_TRANSMITTER_FILE || Bundles[0]->alSettings.status == STATUS_RECEIVER_FILE ) fclose(Bundles[0]->alSettings.io.fptr);
+        if ( Bundles[0]->alSettings.status == STATUS_TRANSMITTER_FILE || Bundles[0]->alSettings.status == STATUS_RECEIVER_FILE )
+            fclose(Bundles[0]->alSettings.io.fptr);
         fprintf(stderr, "Error: Initializing app layer\n");
     }
+
+    if ( Bundles[0]->alSettings.status == STATUS_RECEIVER_FILE_RECEIVED_NAME ) {
+        if ( Bundles[0]->alSettings.io.fptr != NULL )
+            fclose(Bundles[0]->alSettings.io.fptr);
+    }
+
     return 0;
 
 cleanUp:

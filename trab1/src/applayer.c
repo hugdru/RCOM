@@ -95,7 +95,11 @@ int initAppLayer(Bundle *bundle) {
             fprintf(stderr, "appLayer.settings->fileName is set to Null in RECEIVER_FILE mode");
             return -1;
         }
-    } else if (appLayer.settings->status != STATUS_TRANSMITTER_STRING) {
+    } else if (appLayer.settings->status == STATUS_RECEIVER_FILE_RECEIVED_NAME ) {
+        fprintf(stderr, "Gonna create fileName when control packet start arrives\n");
+    } else if (appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
+        appLayer.fileSize = strlen(appLayer.settings->io.chptr) + 1;
+    } else {
         fprintf(stderr, "Redirections and pipes are not implemented yet\n");
         return -1;
     }
@@ -139,51 +143,92 @@ int initAppLayer(Bundle *bundle) {
 static int parserPacket(uint8_t* packet, size_t size) {
     uint8_t C = packet[0];
     int res;
-   //if(C == C_DATA) {
+
+    if(C == C_DATA) {
+        uint8_t sequence = packet[1];
         uint8_t L2 = packet[2];
         uint8_t L1 = packet[3];
         uint32_t dataSize = 256 * L2 + L1;
 
-        if(appLayer.settings->status == STATUS_RECEIVER_FILE)
-                res = fwrite(packet+4, 1, dataSize, appLayer.settings->io.fptr);
+        if ( sequence != appLayer.sequenceNumber ) {
+            fprintf(stderr, "parserPacket: numero de sequência inválido\n");
+            errno = ECONNABORTED;
+            return -1;
+        }
 
-        fprintf(stderr, "ParserPacket Res: %d\n", res);
+        if ( (appLayer.settings->status == STATUS_RECEIVER_FILE_RECEIVED_NAME) && appLayer.settings->io.fptr == NULL ) {
+            fprintf(stderr, "parserPacket: esperava um C_START antes do C_DATA\n");
+            return -1;
+        }
 
+        if( appLayer.settings->status == STATUS_RECEIVER_FILE || appLayer.settings->status == STATUS_RECEIVER_FILE_RECEIVED_NAME) {
+            res = fwrite(packet+4, 1, dataSize, appLayer.settings->io.fptr);
+            if ( ferror(appLayer.settings->io.fptr) ) {
+                fprintf(stderr, "parserPacket: erro ao escrever para o ficheiro\n");
+                return -1;
+            }
+            fprintf(stderr, "parserPacket: number of bytes written to file %d\n", res);
+            appLayer.fileSize += res;
+            ++appLayer.sequenceNumber;
+            if ( appLayer.sequenceNumber > 255 ) appLayer.sequenceNumber = 0;
+        } else {
+            // Pipes e redireccões não foram implementadas
+        }
+    } else if ( C == C_START ) {
 
-    //}
+        uint8_t type = packet[1];
+        uint8_t length = packet[2];
+        char *fileNameReceived;
 
-     if(C == C_START) {
-        size_t i = 1;
-        while(i < size) {
-            uint8_t type = packet[i++];
-            size_t length = packet[i++];
-            uint8_t value[length];
+        fileNameReceived = (char *) malloc( sizeof(char) * length );
+        memcpy(fileNameReceived,packet+3,length);
 
-
-            strncpy (value, packet + i, length);
-            i += length;
-
-            switch(type) {
-                case TYPE_FILESIZE:
-                    appLayer.fileSize = (int) value; // fileSize is in AppLayer
-                    break;
-                case TYPE_FILENAME:
-                    appLayer.settings->fileName = value;
-                    appLayer.settings->io.fptr = fopen(value, "w"); //Creates a file, if exists erases the content first
+        switch(type) {
+            case TYPE_FILESIZE:
+                // No nosso caso só recebe no fim
+                fprintf(stderr, "parserPacket: Not expected fileSize type\n");
+                /*appLayer.fileSize = (int) value; // fileSize is in AppLayer*/
+                break;
+            case TYPE_FILENAME:
+                if ( appLayer.settings->status == STATUS_RECEIVER_FILE_RECEIVED_NAME ) {
+                    appLayer.settings->fileName = fileNameReceived;
+                    appLayer.settings->io.fptr = fopen(fileNameReceived, "w+b"); //Creates a file, if exists erases the content first
                     if (appLayer.settings->io.fptr == NULL) {
-                        fprintf(stderr, "Error opening file '%s'\n", value);
+                        fprintf(stderr, "parserPacket: Error opening file '%s'\n", fileNameReceived);
                         return -1;
                     }
-                    break;
-                default:
-                    fprintf(stderr, "Error: Start Packet type not correct\n");
-                    return -1;
-                    break;
-            }
-
+                }
+                break;
+            default:
+                fprintf(stderr, "parserPacket: Start Packet type not correct\n");
+                return -1;
+                break;
         }
-    }
-    else if(C == C_END) {
+    } else if( C == C_END ) {
+        uint8_t type = packet[1];
+        uint8_t length = packet[2];
+        char *fileSizeReceivedAsString;
+        long int fileSizeReceived;
+
+        switch(type) {
+            case TYPE_FILESIZE:
+                fileSizeReceivedAsString = (char *) malloc( sizeof(char) * length + 1 );
+                memcpy(fileSizeReceivedAsString,packet+3,length);
+                fileSizeReceivedAsString[length] = 0;
+
+                fprintf(stderr, "parserPacket: fileSizeReceivedAsString %.*s\n", length, fileSizeReceivedAsString);
+                fileSizeReceived = atol(fileSizeReceivedAsString);
+                fprintf(stderr, "parserPacket: fileSizeReceived %li vs fileSize %li\n", fileSizeReceived, appLayer.fileSize);
+                if ( fileSizeReceived != appLayer.fileSize ) {
+                    fprintf(stderr, "parserPacket: fileSizeReceived != fileSize\n");
+                    return -1;
+                }
+                break;
+            default:
+                fprintf(stderr, "parserPacket: End Packet type not correct\n");
+                return -1;
+                break;
+        }
 
     }
     return 0;
@@ -208,7 +253,10 @@ static int read(void) {
                 for (i = 0; i < packetSize; i++) {
                     fprintf(stderr, "%c", packet[i]);
                 }
-                parserPacket(packet, packetSize);
+                if ( parserPacket(packet, packetSize) != 0 ) {
+                    fprintf(stderr, "AppRead parserPacket failed \n");
+                    return -1;
+                }
             }
         }
     }
@@ -357,8 +405,9 @@ static int writeEndPacket(void) {
     uint8_t i;
 
     for (i = 0; i < sizeof(uint32_t); ++i) {
-        packet[i+3] = (appLayer.fileSize >> 8*i) & 0xFF;
+        packet[i+3] = (appLayer.fileSize >> (8*i)) & 0xFF;
     }
+    fprintf(stderr, "writeEndPacket: fileSize %li, fileSizeToSend %.*s\n", appLayer.fileSize, (int)sizeof(uint32_t), packet+3);
 
     return llwrite(packet, packetSize);
 }
