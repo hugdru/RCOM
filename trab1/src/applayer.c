@@ -112,7 +112,7 @@ int initAppLayer(Bundle *bundle) {
             return -1;
         }
     }
-    
+
     if( llclose() < 0) {
         fprintf(stderr, "Error: llclose()\n");
         return -1;
@@ -129,13 +129,13 @@ static int parserPacket(uint8_t* packet, size_t size) {
         uint8_t L2 = packet[2];
         uint8_t L1 = packet[3];
         uint32_t dataSize = 256 * L2 + L1;
-        
+
         if(appLayer.settings->status == STATUS_RECEIVER_FILE)
                 res = fwrite(packet+4, 1, dataSize, appLayer.settings->io.fptr);
-                
+
         fprintf(stderr, "ParserPacket Res: %d\n", res);
-      
- 
+
+
     //}
 
      if(C == C_START) {
@@ -170,7 +170,7 @@ static int parserPacket(uint8_t* packet, size_t size) {
         }
     }
     else if(C == C_END) {
-                
+
         llclose();
         return 1;
     }
@@ -178,31 +178,29 @@ static int parserPacket(uint8_t* packet, size_t size) {
 }
 
 static int read(void) {
-        uint8_t *packet;
-        size_t packetSize;
-        bool disconnected = false;
+    uint8_t *packet;
+    size_t packetSize;
+    size_t i;
 
-        while(1) {
-            packet = llread(&packetSize);
-            if ( errno != 0 ) {
-                fprintf(stderr, "AppRead errno\n");
-                return -1;
-            }
-            else {
-                if ( packet == NULL ) {
-                    fprintf(stderr, "AppRead NULL\n");
-                    return 0;
-                }
-                else {
+    while(1) {
+        packet = llread(&packetSize);
+        if ( errno != 0 ) {
+            fprintf(stderr, "AppRead errno\n");
+            return -1;
+        } else {
+            if ( packet == NULL ) {
+                fprintf(stderr, "AppRead NULL\n");
+                return 0;
+            } else {
                 fprintf(stderr, "AppRead packet: ");
-                int i = 0;
-                for(; i < packetSize; i++)
+                for(i = 0; i < packetSize; i++) {
                     fprintf(stderr, "%c", packet[i]);
-                parserPacket(packet, packetSize);
                 }
+                parserPacket(packet, packetSize);
             }
         }
-        return 0;
+    }
+    return 0;
 }
 
 static int write(void) {
@@ -211,15 +209,14 @@ static int write(void) {
     uint8_t data[appLayer.settings->packetBodySize+10];
     size_t stringSize, lidos = 0;
     int numCharWritted = 0;
-    
+
     if(appLayer.settings->status == STATUS_TRANSMITTER_STRING)
         stringSize = strlen(appLayer.settings->io.chptr);
    else {
         // writeStartPacket();
         rewind(appLayer.settings->io.fptr);
    }
-    
-    
+
     while(!end) {
         if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) {
             res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
@@ -228,7 +225,7 @@ static int write(void) {
             if(res < appLayer.settings->packetBodySize)
                 end = true; // End of file
         }
-            
+
         else if(appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
             if(stringSize - lidos <  appLayer.settings->packetBodySize) {
                 memcpy(data, appLayer.settings->io.chptr+lidos, stringSize-lidos);
@@ -239,13 +236,13 @@ static int write(void) {
                 lidos += appLayer.settings->packetBodySize;
             }
             fprintf(stderr, "AppWrite packet: %s\n", data);
-            
+
         }
-        
+
         else {
             //Por fazer, ler stream
         }
-        
+
         if( writeDataPacket(data, res) == 1) {
              fprintf(stderr, "AppWrite Number of chars read so far: %d\n", numCharWritted);
              fprintf(stderr, "AppWrite failed\n");
@@ -253,10 +250,10 @@ static int write(void) {
         }
         numCharWritted += res;
     }
-    
-    if(appLayer.settings->status == STATUS_TRANSMITTER_FILE) 
+
+    if(appLayer.settings->status == STATUS_TRANSMITTER_FILE)
         writeEndPacket();
-        
+
     fprintf(stderr, "\n\nAppWrite Number of chars Writted: %d\n\n", numCharWritted);
     return 0;
 }
