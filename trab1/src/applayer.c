@@ -106,7 +106,7 @@ int initAppLayer(Bundle *bundle) {
         fprintf(stderr, "Error: llopen()\n");
         return -1;
     }
-    else fprintf(stderr, "llopen() was successful\n");
+    else fprintf(stderr, "llopen() was successful\n\n");
 
     appLayer.sequenceNumber = 0;
 
@@ -172,12 +172,12 @@ static int parserPacket(uint8_t* packet, size_t size) {
                     appLayer.settings->io.fptr = fopen(value, "w"); //Creates a file, if exists erases the content first
                     if (appLayer.settings->io.fptr == NULL) {
                         fprintf(stderr, "Error opening file '%s'\n", value);
-                        exit(1);
+                        return -1;
                     }
                     break;
                 default:
                     fprintf(stderr, "Error: Start Packet type not correct\n");
-                    exit(1);
+                    return -1;
                     break;
             }
 
@@ -185,8 +185,6 @@ static int parserPacket(uint8_t* packet, size_t size) {
     }
     else if(C == C_END) {
 
-        llclose();
-        return 1;
     }
     return 0;
 }
@@ -199,11 +197,11 @@ static int read(void) {
     while (1) {
         packet = llread(&packetSize);
         if ( errno != 0 ) {
-            fprintf(stderr, "AppRead errno\n");
+            fprintf(stderr, "AppRead received llread with error\n");
             return -1;
         } else {
             if ( packet == NULL ) {
-                fprintf(stderr, "AppRead NULL\n");
+                fprintf(stderr, "AppRead received disconnect from llread\n");
                 return 0;
             } else {
                 fprintf(stderr, "AppRead packet: ");
@@ -247,7 +245,7 @@ static int write(void) {
                 return -1;
             } else {
                 fprintf(stderr, "AppWrite Res: %lu\n", res);
-                fprintf(stderr, "AppWrite packet: ");
+                fprintf(stderr, "AppWrite packet data: ");
                 fprintf(stderr, "%.*s\n", (int)res, data);
             }
         } else if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING ) {
@@ -330,8 +328,12 @@ static int writeDataPacket(uint8_t *data, size_t size) {
     packet[3] = L1;
     memcpy(packet+4, data, size);
 
-    for (i = 0; i < size+4; ++i)
-        fprintf(stderr, "%X", packet[i]);
+    fprintf(stderr, "Full packet: ");
+    for (i = 0; i < size+4; ++i) {
+        if ( i > 3 ) fprintf(stderr, "%c", packet[i]);
+        else fprintf(stderr, "%X", packet[i]);
+    }
+    fprintf(stderr, "\n");
 
     //fprintf(stderr, "Size: %d %X   L2: %d %X  L1: %d %X\n", size, size/256, size%256);
     //fprintf(stderr, "DataPacket: %s\n", packet);

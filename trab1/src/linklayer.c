@@ -235,7 +235,7 @@ int llwrite(uint8_t *packet, size_t packetSize) {
         alarmed = false;
         received = false;
 
-        fprintf(stderr, "Sending frame          Tries: %d\n", tries);
+        fprintf(stderr, "Sending frame, Tries: %d\n", tries);
         res = write(linkLayer.serialFileDescriptor, stuffedFrame,
                 stuffedFrameSize);
         alarm(linkLayer.settings->timeout);
@@ -413,10 +413,13 @@ int llclose(void) {
     unsigned int tries = 0;
     static bool success = false;
 
+    fprintf(stderr, "Entered llclose\n");
+
     if (!blocked) {
         fprintf(stderr, "You have to llinitialize and llopen first\n");
         return -1;
     }
+
 
     size_t DISCsize, UAsize;
     uint8_t * DISC = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &DISCsize,
@@ -436,6 +439,7 @@ int llclose(void) {
                 alarm(linkLayer.settings->timeout);
                 received = readCMD(&C);
                 if (received && C == C_UA) {
+                    fprintf(stderr, "Receiver in llclose received C_UA\n");
                     success = true;
                     goto cleanSerial;
                 }
@@ -476,6 +480,7 @@ int llclose(void) {
         new_act = NULL;
         free(UA);
         free(DISC);
+        fprintf(stderr, "llclose finished without errors\n");
         return 0;
     } else {
         free(UA);
@@ -565,8 +570,7 @@ static bool readCMD(uint8_t * C) {
         res = read(linkLayer.serialFileDescriptor, &ch, 1);
 
         if ( res == 1 ) {
-            fprintf(stderr, "State: %d     Res: %lu\n", state, res);
-            fprintf(stderr, "Char: %X\n", ch);
+            fprintf(stderr, "State: %d      Res: %lu      C: %c\n", state, res, ch);
             switch (state) {
             case START:
                 if (ch == F)
