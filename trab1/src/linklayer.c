@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <termios.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 /**
  * Defines
@@ -34,6 +35,8 @@ typedef struct{
     unsigned int numFramesIResent;
     unsigned int numTimeouts; 
     unsigned int numREJ; 
+    struct timeval startTime;
+    struct timeval endTime;
 } Register;
 
 typedef struct {
@@ -126,7 +129,8 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     linkLayer.reg.numFramesIResent = 0;
     linkLayer.reg.numTimeouts = 0;
     linkLayer.reg.numREJ = 0;
-    
+    gettimeofday(&linkLayer.reg.startTime, 0);
+    gettimeofday(&linkLayer.reg.endTime, 0);
     blocked = true;
     return 0;
 }
@@ -486,6 +490,7 @@ int llclose(void) {
         free(UA);
         free(DISC);
         fprintf(stderr, "llclose finished without errors\n");
+        gettimeofday(&linkLayer.reg.endTime, 0);
         printRegister();
         return 0;
     } else {
@@ -818,6 +823,11 @@ static uint8_t generateBcc(const uint8_t * data, size_t size) {
 }
 
 static void printRegister() {
+    //long elapsed = (linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec)*1000000 + linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec;
+    long seconds = linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec;
+    long milliseconds = (linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec)/1000;
+    
     fprintf(stderr, "/////////////////////////////////////\nNumber of Frames I sent: %d\nNumber of Frames I resent: %d\n", linkLayer.reg.numFramesI, linkLayer.reg.numFramesIResent);
-    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\n/////////////////////////////////////\n", linkLayer.reg.numTimeouts, linkLayer.reg.numREJ); 
+    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li.%li seconds\n/////////////////////////////////////\n", 
+        linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, seconds, milliseconds); 
 }
