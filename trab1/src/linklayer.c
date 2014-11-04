@@ -824,10 +824,9 @@ static uint8_t generateBcc(const uint8_t * data, size_t size) {
 
 static void printRegister() {
     //long elapsed = (linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec)*1000000 + linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec;
-    long seconds = linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec;
-    long milliseconds = (linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec)/1000;
+    long milliseconds = (linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec)*1000 + (linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec)/1000;
     
     fprintf(stderr, "/////////////////////////////////////\nNumber of Frames I sent: %d\nNumber of Frames I resent: %d\n", linkLayer.reg.numFramesI, linkLayer.reg.numFramesIResent);
-    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li.%li seconds\n/////////////////////////////////////\n", 
-        linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, seconds, milliseconds); 
+    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li milliseconds\n/////////////////////////////////////\n", 
+        linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, milliseconds); 
 }
