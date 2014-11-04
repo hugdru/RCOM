@@ -207,17 +207,21 @@ static int parserPacket(uint8_t* packet, size_t size) {
     } else if( C == C_END ) {
         uint8_t type = packet[1];
         uint8_t length = packet[2];
-        char *fileSizeReceivedAsString;
-        long int fileSizeReceived;
+        /*char *fileSizeReceivedAsString;*/
+        long int fileSizeReceived = 0;
+        size_t i;
 
         switch(type) {
             case TYPE_FILESIZE:
-                fileSizeReceivedAsString = (char *) malloc( sizeof(char) * length + 1 );
-                memcpy(fileSizeReceivedAsString,packet+3,length);
-                fileSizeReceivedAsString[length] = 0;
+                /*fileSizeReceivedAsString = (char *) malloc( sizeof(char) * length + 1 );*/
+                /*memcpy(fileSizeReceivedAsString,packet+3,length);*/
+                /*fileSizeReceivedAsString[length] = 0;*/
 
-                fprintf(stderr, "parserPacket: fileSizeReceivedAsString %.*s\n", length, fileSizeReceivedAsString);
-                fileSizeReceived = atol(fileSizeReceivedAsString);
+                for (i = 0; i < length; ++i)
+                    fileSizeReceived += packet[3+i] << i*8;
+
+                /*fprintf(stderr, "parserPacket: fileSizeReceivedAsString %.*s\n", length, fileSizeReceivedAsString);*/
+                /*fileSizeReceived = atol(fileSizeReceivedAsString);*/
                 fprintf(stderr, "parserPacket: fileSizeReceived %li vs fileSize %li\n", fileSizeReceived, appLayer.fileSize);
                 if ( fileSizeReceived != appLayer.fileSize ) {
                     fprintf(stderr, "parserPacket: fileSizeReceived != fileSize\n");
@@ -395,19 +399,15 @@ static int writeDataPacket(uint8_t *data, size_t size) {
 
 static int writeEndPacket(void) {
 
-    size_t packetSize = 3 + sizeof(uint32_t); //  C + T + L + bytes do tipo
+    size_t packetSize = 3 + sizeof(appLayer.fileSize); //  C + T + L + bytes do tipo
     uint8_t packet[packetSize];
 
     packet[0] = C_END; // C
     packet[1] = TYPE_FILESIZE; // T
-    packet[2] = sizeof(uint32_t); // V
+    packet[2] = sizeof(appLayer.fileSize); // V
 
-    uint8_t i;
-
-    for (i = 0; i < sizeof(uint32_t); ++i) {
-        packet[i+3] = (appLayer.fileSize >> (8*i)) & 0xFF;
-    }
-    fprintf(stderr, "writeEndPacket: fileSize %li, fileSizeToSend %.*s\n", appLayer.fileSize, (int)sizeof(uint32_t), packet+3);
+    memcpy(packet+3,&appLayer.fileSize,sizeof(appLayer.fileSize));
+    fprintf(stderr, "writeEndPacket: fileSize %li, fileSizeToSend %li\n", appLayer.fileSize, (long int)packet[3]);
 
     return llwrite(packet, packetSize);
 }
