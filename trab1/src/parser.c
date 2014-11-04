@@ -52,24 +52,24 @@ void print_usage(char **argv) {
 
     fprintf(stderr, "\nMODE");
     fprintf(stderr, "\n Sender:\n");
-    printf(
+    fprintf(stderr,
             "     -x \t\tInformation to send is read from stdin be it a pipe or redirection\n");
-    printf(
-            "     < PathToFile\tSends a file must be used along with option -\n");
-    printf("     -m Message\t\tSends a message\n");
-    printf("\n Receiver (default (no args))\n");
-    printf("     > PathToFile\tReceive information and place it in a file\n");
-    printf("     -S  Path\t\tFile to send\n");
-    printf("     -R  Path\t\tWhere to place received file\n");
+    fprintf(stderr,
+            "     < PathToFile\tSends a file must be used along with option -x\n");
+    fprintf(stderr, "     -m Message\t\tSends a message\n");
+    fprintf(stderr, "\n Receiver (default (no args))\n");
+    fprintf(stderr, "     > PathToFile\tReceive information and place it in a file\n");
+    fprintf(stderr, "     -S  Path\t\tFile to send\n");
+    fprintf(stderr, "     -R  Path\t\tWhere to place received file\n");
 
-    printf("\n--- Examples ---\n");
-    printf("%s -h\n", ptr);
-    printf(
+    fprintf(stderr, "\n--- Examples ---\n");
+    fprintf(stderr, "%s -h\n", ptr);
+    fprintf(stderr,
             "%s -N 2 -d '/dev/ttyS1' -t 5 -r 4 -S \"~/pictures/cat.jpeg\" + -d '/dev/ttyS2' -R \"~/passwords.kbd\"\n",
             ptr);
-    printf("%s -d '/dev/ttyS1' -x < 'dog.png'\n", ptr);
-    printf("%s -x < nuclearlaunchCodes\n", ptr);
-    printf("cat file | %s -N 2 -d '/dev/ttyS1' -d '/dev/ttyS2' -x\n", ptr);
+    fprintf(stderr, "%s -d '/dev/ttyS1' -x < 'dog.png'\n", ptr);
+    fprintf(stderr, "%s -x < nuclearlaunchCodes\n", ptr);
+    fprintf(stderr, "cat file | %s -N 2 -d '/dev/ttyS1' -d '/dev/ttyS2' -x\n", ptr);
 }
 
 Bundle** parse_args(int argc, char **argv, size_t *NBundles) {

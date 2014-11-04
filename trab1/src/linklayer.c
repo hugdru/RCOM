@@ -274,13 +274,6 @@ uint8_t* llread(size_t *payloadSize) {
         errno = ENOMEM;
         return NULL;
     }
-    size_t discCmdSize;
-    uint8_t *discCmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_DISC, &discCmdSize, false);
-    if ( discCmd == NULL ) {
-        free(uaCmd);
-        errno = ENOMEM;
-        return NULL;
-    }
     size_t rr0CmdSize;
     uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
     if ( rr0Cmd == NULL ) {
@@ -373,9 +366,9 @@ uint8_t* llread(size_t *payloadSize) {
                     else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     return payloadToReturn;
                 } else if ( C == (C_I_RAW | (changeSequenceNumber() << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
-                    if ( linkLayer.sequenceNumber == 0 ) 
+                    if ( linkLayer.sequenceNumber == 0 )
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    else 
+                    else
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     fprintf(stderr, "Trama duplicada");
                 } else if ( C == C_DISC ) { // Transmitter já enviou tudo
