@@ -103,40 +103,58 @@ int initAppLayer(Bundle *bundle) {
         fprintf(stderr, "Redirections and pipes are not implemented yet\n");
         return -1;
     }
-
-    llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
-
-    if ( llopen() != 0 ) {
-        fprintf(stderr, "Error: llopen()\n");
-        return -1;
-    }
-    else fprintf(stderr, "llopen() was successful\n\n");
-
-    appLayer.sequenceNumber = 0;
-
-    if ( IS_RECEIVER(appLayer.settings->status) ) {
-        res = read();
-        if ( res != 0 ) {
-            fprintf(stderr, "There was an error in applayer read function\n");
-            return -1;
+    unsigned int tries;
+    
+    for (tries = 0; tries < bundle->llSettings.numAttempts; ++tries) {
+        llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
+        
+        if(tries > 0)
+            fprintf(stderr, "Recuperação de erro: %d\n", tries);
+            
+        if ( llopen() != 0 ) {
+            fprintf(stderr, "Error: llopen()\n");
+            llclose();
+            continue;
         }
-    } else {
-        res = write();
-        if ( res != 0 ) {
-            fprintf(stderr, "There was an error in applayer write function\n");
-            return -1;
+        else fprintf(stderr, "llopen() was successful\n\n");
+
+        appLayer.sequenceNumber = 0;
+
+        if ( IS_RECEIVER(appLayer.settings->status) ) {
+            res = read();
+            if ( res != 0 ) {
+                fprintf(stderr, "There was an error in applayer read function\n");
+                llclose();
+                continue;
+            }
+        } else {
+            res = write();
+            if ( res != 0 ) {
+                fprintf(stderr, "There was an error in applayer write function\n");
+                llclose();
+                continue;
+            }
         }
+
+        if( llclose() != 0) {
+            fprintf(stderr, "Error: llclose(), going to exit\n");
+                return -1;
+        }
+        else fprintf(stderr, "llclose() was successful\n");
+        
+        break;
     }
+    
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE || appLayer.settings->status == STATUS_RECEIVER_FILE ) 
+        fclose(appLayer.settings->io.fptr);
 
-    if( llclose() != 0) {
-        fprintf(stderr, "Error: llclose()\n");
-        return -1;
+    if (tries < bundle->llSettings.numAttempts) {
+         fprintf(stderr, "\n\nO ficheiro foi transferido com sucesso!\nNúmero de tentativas: %d\n", tries);
     }
-
-    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE || appLayer.settings->status == STATUS_RECEIVER_FILE ) fclose(appLayer.settings->io.fptr);
-
-    else fprintf(stderr, "llclose() was successful\n");
-
+    else {
+         fprintf(stderr, "\n\nO ficheiro não conseguiu transferido!\n");
+    }
+   
     return 0;
 }
 
@@ -255,10 +273,11 @@ static int read(void) {
             } else {
                 fprintf(stderr, "AppRead packet: ");
                 for (i = 0; i < packetSize; i++) {
-                    fprintf(stderr, "%c", packet[i]);
+                    fprintf(stderr, "%X", packet[i]);
                 }
+                fprintf(stderr, "\n");
                 if ( parserPacket(packet, packetSize) != 0 ) {
-                    fprintf(stderr, "AppRead parserPacket failed \n");
+                    fprintf(stderr, "AppRead parserPacket failed\n");
                     return -1;
                 }
             }

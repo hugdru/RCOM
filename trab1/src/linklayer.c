@@ -124,7 +124,10 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
         }
     }
 
-    linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize + 6);
+    if( (linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize + 6) ) == NULL) {
+        fprintf(stderr, "Error in llinitialize(): malloc in Frame was unsuccessful\n");
+        return -1; 
+    }
     linkLayer.frameLength = 0;
 
     linkLayer.reg.numFramesI = 0;
@@ -145,7 +148,7 @@ int llopen(void) {
         fprintf(stderr, "You have to llinitialize first\n");
         return -1;
     }
-
+    
     /*
      Open serial port device for reading and writing and not as controlling tty
      because we don't want to get killed if linenoise sends CTRL-C.
@@ -276,6 +279,9 @@ int llwrite(uint8_t *packet, size_t packetSize) {
             } else if ( C == (C_REJ_RAW | (linkLayer.sequenceNumber << 7)) ) { //REJ Certo
                 linkLayer.reg.numREJ++;
             } else if ( C == (C_REJ_RAW | (linkLayer.sequenceNumber << 7)) ) {//REJ Errado
+            } else if ( C == C_DISC) {
+                fprintf(stderr, "llwrite(): Receiver failed, trying again\n");
+                break;
             } else { 
                 fprintf(stderr, "Received an unexpected command\n");
             }
@@ -586,7 +592,7 @@ static bool readCMD(uint8_t * C) {
         if(res == 0)
             state = START;
         else if ( res == 1 ) {
-            fprintf(stderr, "State: %d      Res: %lu      C: %c\n", state, res, ch);
+            fprintf(stderr, "State: %d      Res: %lu      C: %X\n", state, res, ch);
             switch (state) {
             case START:
                 if (ch == F)
@@ -643,10 +649,13 @@ static bool readCMD(uint8_t * C) {
                     fprintf(stderr, "\n");
                     return true;
                 } else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
+                    fprintf(stderr, "ReadCMD: Going to start filling frame header\n");
+                    fprintf(stderr, "FrameLength %d\n   Frame pointer: %d\n", linkLayer.frameLength, linkLayer.frame);
                     linkLayer.frame[linkLayer.frameLength++] = F;
                     linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
                     linkLayer.frame[linkLayer.frameLength++] = *C;
                     linkLayer.frame[linkLayer.frameLength++] = BCC1;
+                    fprintf(stderr, "ReadCMD: Filled frame header\n");
                     if ( ch == ESC ) {
                         stuffing = true;
                         BCC2 = 0x00;
@@ -672,15 +681,16 @@ static bool readCMD(uint8_t * C) {
                     linkLayer.frameLength = 0;
                     stuffing = false;
                 } else if (ch == F) {
-                    //bodyErrorTest = random_bool(0.35); //Gerador de erros em software no campo de dados
+                    //bodyErrorTest = random_bool(0.30); //Gerador de erros em software no campo de dados
                     if( bodyErrorTest ) {
                         fprintf(stderr, "Erro aleatório, body tem erros\n");
                         BCC2 += 1;
+                        bodyErrorTest = false;
                     }
                     BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC
                     if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
                         linkLayer.frame[linkLayer.frameLength++] = ch;
-                        printf("Received Frame I, Length: %lu", linkLayer.frameLength);
+                        fprintf(stderr, "Received Frame I, Length: %lu\n", linkLayer.frameLength);
                     }
                     return true; // Uma vez que tem o cabeçalho da header válido, Rej e RR, fora ele verifica se o último elemento é F ou não
                 } else if (stuffing) {  //Destuffing in run-time
@@ -856,6 +866,7 @@ static void printRegister() {
 }
 
 static bool random_bool(double probability) {
+    srand(time(0)+clock()+random());
     double p_scaled = probability * ( (double)RAND_MAX+1) - rand();
     if ( p_scaled >= 1 ) return true;
     if ( p_scaled <= 0 ) return false;
