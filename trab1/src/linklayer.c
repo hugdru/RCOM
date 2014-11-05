@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <termios.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 /**
  * Defines
@@ -34,6 +35,8 @@ typedef struct{
     unsigned int numFramesIResent;
     unsigned int numTimeouts; 
     unsigned int numREJ; 
+    struct timeval startTime;
+    struct timeval endTime;
 } Register;
 
 typedef struct {
@@ -71,6 +74,7 @@ static bool isCMD(uint8_t ch);
 static bool isCMDI(uint8_t ch);
 static bool readCMD(uint8_t * C);
 static void printRegister();
+static bool random_bool(double probability);
 
 /**
  * Global Variables
@@ -79,6 +83,7 @@ static void printRegister();
 bool blockedSet = false; // Usado no LLread -> Não usar para mais nada
 bool blocked = false; // Usado para o llinitialize, llopen e llclose -> Não usar para mais nada
 bool alarmed = false;
+
 struct sigaction *new_act = NULL;
 
 LinkLayer linkLayer;
@@ -126,7 +131,8 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
     linkLayer.reg.numFramesIResent = 0;
     linkLayer.reg.numTimeouts = 0;
     linkLayer.reg.numREJ = 0;
-    
+    gettimeofday(&linkLayer.reg.startTime, 0);
+    gettimeofday(&linkLayer.reg.endTime, 0);
     blocked = true;
     return 0;
 }
@@ -291,31 +297,31 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *uaCmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_UA, &uaCmdSize, false);
     if ( uaCmd == NULL ) {
         errno = ENOMEM;
-        return NULL;
+        goto cleanUp;
     }
     size_t rr0CmdSize;
     uint8_t *rr0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW, &rr0CmdSize, false);
     if ( rr0Cmd == NULL ) {
         errno = ENOMEM;
-        return NULL;
+        goto cleanUp;
     }
     size_t rr1CmdSize;
     uint8_t *rr1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_RR_RAW | 0x80, &rr1CmdSize, false);
     if ( rr1Cmd == NULL ) {
         errno = ENOMEM;
-        return NULL;
+        goto cleanUp;
     }
     size_t rej0CmdSize;
     uint8_t *rej0Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW, &rej0CmdSize, false);
     if ( rej0Cmd == NULL ) {
         errno = ENOMEM;
-        return NULL;
+        goto cleanUp;
     }
     size_t rej1CmdSize;
     uint8_t *rej1Cmd = buildFrameHeader(A_CSENDER_RRECEIVER, C_REJ_RAW | 0x80, &rej1CmdSize, false);
     if ( rej1Cmd == NULL ) {
         errno = ENOMEM;
-        return NULL;
+        goto cleanUp;
     }
 
     unsigned int tries = 0;
@@ -326,13 +332,13 @@ uint8_t* llread(size_t *payloadSize) {
     uint8_t *payloadToReturn;
     size_t i, tempSize;
 
-    errno = 0;
-
     while (tries < linkLayer.settings->numAttempts) {
         fprintf(stderr, "Receiving frame\n");
         alarmed = false;
         alarm(linkLayer.settings->timeout);
         received = readCMD(&C);
+        errno = 0;
+        
         if (tries == 0) previousC = C;
 
         if (received) {
@@ -363,6 +369,7 @@ uint8_t* llread(size_t *payloadSize) {
                     tempSize = linkLayer.frameLength - 6;
                     payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
                     if ( payloadToReturn == NULL ) {
+                        fprintf(stderr, "errno Enomem\n");
                         errno = ENOMEM;
                         goto cleanUp;
                     }
@@ -371,8 +378,10 @@ uint8_t* llread(size_t *payloadSize) {
                     }
                     *payloadSize = tempSize;
                     linkLayer.sequenceNumber = changeSequenceNumber();
-                    if ( linkLayer.sequenceNumber == 0 ) res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    else res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if ( linkLayer.sequenceNumber == 0 ) 
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     linkLayer.reg.numFramesI++;
                     return payloadToReturn;
                 } else if ( C == (C_I_RAW | (changeSequenceNumber() << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
@@ -398,6 +407,7 @@ uint8_t* llread(size_t *payloadSize) {
         previousC = C;
     }
     
+    fprintf(stderr, "errno Econnaborted\n");
     errno = ECONNABORTED;
     
     cleanUp:
@@ -486,6 +496,7 @@ int llclose(void) {
         free(UA);
         free(DISC);
         fprintf(stderr, "llclose finished without errors\n");
+        gettimeofday(&linkLayer.reg.endTime, 0);
         printRegister();
         return 0;
     } else {
@@ -564,13 +575,17 @@ static bool readCMD(uint8_t * C) {
     uint8_t ch, BCC1 = 0x00, BCC2 = 0x00, temp;
     bool stuffing = false;
     State state = START;
-
+    bool headerErrorTest = false;
+    bool bodyErrorTest = false;
+      
     linkLayer.frameLength = 0;
 
     while (!alarmed) {
         res = read(linkLayer.serialFileDescriptor, &ch, 1);
-
-        if ( res == 1 ) {
+        
+        if(res == 0)
+            state = START;
+        else if ( res == 1 ) {
             fprintf(stderr, "State: %d      Res: %lu      C: %c\n", state, res, ch);
             switch (state) {
             case START:
@@ -597,11 +612,21 @@ static bool readCMD(uint8_t * C) {
                 }
                 break;
             case C_RCV:
+                 //headerErrorTest = random_bool(0.15); //Gerador de erros no header em software 15% probabilidade
+                 if( headerErrorTest ) {   //Random error generator
+                        fprintf(stderr, "Erro aleatório, header tem erros\n");
+                        BCC1 += 5;
+                        headerErrorTest = false;
+                 }
+                        
                 if (stuffing) { //Destuffing in run-time
                     stuffing = false;
                     if ((ch ^ STUFFING_XOR_BYTE) == BCC1) {
                         state = BCC_OK;
                     }
+                    else
+                         state = START;
+                         
                 } else if (ch == ESC) {
                     stuffing = true;
                 } else if (ch == BCC1) {
@@ -647,6 +672,11 @@ static bool readCMD(uint8_t * C) {
                     linkLayer.frameLength = 0;
                     stuffing = false;
                 } else if (ch == F) {
+                    //bodyErrorTest = random_bool(0.35); //Gerador de erros em software no campo de dados
+                    if( bodyErrorTest ) {
+                        fprintf(stderr, "Erro aleatório, body tem erros\n");
+                        BCC2 += 1;
+                    }
                     BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC
                     if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
                         linkLayer.frame[linkLayer.frameLength++] = ch;
@@ -818,6 +848,16 @@ static uint8_t generateBcc(const uint8_t * data, size_t size) {
 }
 
 static void printRegister() {
+    long milliseconds = (linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec)*1000 + (linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec)/1000;
+    
     fprintf(stderr, "/////////////////////////////////////\nNumber of Frames I sent: %d\nNumber of Frames I resent: %d\n", linkLayer.reg.numFramesI, linkLayer.reg.numFramesIResent);
-    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\n/////////////////////////////////////\n", linkLayer.reg.numTimeouts, linkLayer.reg.numREJ); 
+    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li milliseconds\n/////////////////////////////////////\n", 
+        linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, milliseconds); 
+}
+
+static bool random_bool(double probability) {
+    double p_scaled = probability * ( (double)RAND_MAX+1) - rand();
+    if ( p_scaled >= 1 ) return true;
+    if ( p_scaled <= 0 ) return false;
+    return random_bool( p_scaled );
 }
