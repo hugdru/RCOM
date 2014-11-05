@@ -98,7 +98,7 @@ int initAppLayer(Bundle *bundle) {
     } else if (appLayer.settings->status == STATUS_RECEIVER_FILE_RECEIVED_NAME ) {
         fprintf(stderr, "Gonna create fileName when control packet start arrives\n");
     } else if (appLayer.settings->status == STATUS_TRANSMITTER_STRING) {
-        appLayer.fileSize = strlen(appLayer.settings->io.chptr) + 1;
+        appLayer.fileSize = (long int) strlen(appLayer.settings->io.chptr) + 1;
     } else {
         fprintf(stderr, "Redirections and pipes are not implemented yet\n");
         return -1;
@@ -167,7 +167,7 @@ static int parserPacket(uint8_t* packet, size_t size) {
         uint8_t L2 = packet[2];
         uint8_t L1 = packet[3];
         uint32_t dataSize = 256 * L2 + L1;
-
+        
         if ( sequence != appLayer.sequenceNumber ) {
             fprintf(stderr, "parserPacket: numero de sequência inválido\n");
             errno = ECONNABORTED;
@@ -187,8 +187,10 @@ static int parserPacket(uint8_t* packet, size_t size) {
             }
             fprintf(stderr, "parserPacket: number of bytes written to file %d\n", res);
             appLayer.fileSize += res;
+            
             ++appLayer.sequenceNumber;
-            if ( appLayer.sequenceNumber > 255 ) appLayer.sequenceNumber = 0;
+            if ( appLayer.sequenceNumber > 255 ) 
+                appLayer.sequenceNumber = 0;
         } else {
             // Pipes e redireccões não foram implementadas
         }
@@ -296,8 +298,6 @@ static int write(void) {
     if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING )
         stringSize = strlen(appLayer.settings->io.chptr) + 1;
     else if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
-        // Era uma boa ideia mandar aqui um pacote de controlo só com o nome do ficheiro e no fim o tamanho do ficheiro ou da string
-        // Assim já dava para usar das duas maneiras embora desse para mandar numa só tudo, no fim xor início
         if ( writeStartPacket() != 0 ) {
             fprintf(stderr, "writeStartPacket Failed\n");
             return -1;

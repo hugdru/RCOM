@@ -1,4 +1,6 @@
 #define _XOPEN_SOURCE
+#define _BSD_SOURCE
+
 #include "linklayer.h"
 
 #include <sys/types.h>
@@ -13,6 +15,7 @@
 #include <termios.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <time.h>
 
 /**
  * Defines
@@ -215,12 +218,20 @@ int llopen(void) {
             alarm(linkLayer.settings->timeout);
             received = readCMD(&C);
             if (received && C == C_SET) {
-                res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
+                res = write(linkLayer.serialFileDescriptor, cmd, cmdSize);
+                if (res < 1) {
+                    tries++;
+                    continue;
+                }
                 free(cmd);
                 return 0;
             }
         } else {
-            res = write(linkLayer.serialFileDescriptor, cmd, cmdSize); // o que fazer com res?
+            res = write(linkLayer.serialFileDescriptor, cmd, cmdSize);
+            if (res < 1) {
+                    tries++;
+                    continue;
+            }
             alarm(linkLayer.settings->timeout);
             received = readCMD(&C);
             if (received && C == C_UA) {
@@ -263,6 +274,10 @@ int llwrite(uint8_t *packet, size_t packetSize) {
         fprintf(stderr, "Sending frame, Tries: %d\n", tries);
         res = write(linkLayer.serialFileDescriptor, stuffedFrame,
                 stuffedFrameSize);
+        if (res < 1) {
+                    tries++;
+                    continue;
+        }
         alarm(linkLayer.settings->timeout);
 
         received = readCMD(&C);
@@ -363,6 +378,10 @@ uint8_t* llread(size_t *payloadSize) {
                         res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
                     else
                         res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
                     linkLayer.reg.numFramesIResent++;
                 } else if ( (C == (C_I_RAW | (changeSequenceNumber() << 6))) && (linkLayer.frame[linkLayer.frameLength-1] != F) ) { //RR
                     fprintf(stderr, "Cabeça da trama I boa, resto mau, sequência diferente -> rr\n");
@@ -370,6 +389,10 @@ uint8_t* llread(size_t *payloadSize) {
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     else
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
                 } else if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) { // Trama I esperada
                     fprintf(stderr, "Trama I esperada\n");
                     tempSize = linkLayer.frameLength - 6;
@@ -388,6 +411,10 @@ uint8_t* llread(size_t *payloadSize) {
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
                     else
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
                     linkLayer.reg.numFramesI++;
                     return payloadToReturn;
                 } else if ( C == (C_I_RAW | (changeSequenceNumber() << 6)) ) { // Trama I duplicada, emissor nao recebeu a confirmação a tempo ou a confirmação foi perdida na rede
@@ -395,6 +422,10 @@ uint8_t* llread(size_t *payloadSize) {
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
                     else
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
                     fprintf(stderr, "Trama duplicada");
                 } else if ( C == C_DISC ) { // Transmitter já enviou tudo
                     fprintf(stderr, "LLread received valid disconnect\n");
@@ -404,6 +435,10 @@ uint8_t* llread(size_t *payloadSize) {
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
                     else 
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
                     fprintf(stderr, "Não esperava esta trama");
                 }
             }
@@ -454,9 +489,12 @@ int llclose(void) {
     if ( !success ) {
         while (tries < linkLayer.settings->numAttempts) {
             alarmed = false;
-            // Esta parte é para mudar, só depois de o appLayer estar feito
             if (linkLayer.is_receiver) {
                 res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
+                if (res < 1) { 
+                    tries++;
+                    continue;
+                }
                 alarm(linkLayer.settings->timeout);
                 received = readCMD(&C);
                 if (received && C == C_UA) {
@@ -466,10 +504,18 @@ int llclose(void) {
                 }
             } else {
                 res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
+                if (res < 1) {
+                        tries++;
+                        continue;
+                }
                 alarm(linkLayer.settings->timeout);
                 received = readCMD(&C);
                 if (received && C == C_DISC) {
-                    res = write(linkLayer.serialFileDescriptor, UA, UAsize); //o que fazer com res
+                    res = write(linkLayer.serialFileDescriptor, UA, UAsize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
                     success = true;
                     goto cleanSerial;
                 }
@@ -621,7 +667,7 @@ static bool readCMD(uint8_t * C) {
                  //headerErrorTest = random_bool(0.15); //Gerador de erros no header em software 15% probabilidade
                  if( headerErrorTest ) {   //Random error generator
                         fprintf(stderr, "Erro aleatório, header tem erros\n");
-                        BCC1 += 5;
+                        BCC1 ^= 0x05;
                         headerErrorTest = false;
                  }
                         
@@ -649,13 +695,10 @@ static bool readCMD(uint8_t * C) {
                     fprintf(stderr, "\n");
                     return true;
                 } else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
-                    fprintf(stderr, "ReadCMD: Going to start filling frame header\n");
-                    fprintf(stderr, "FrameLength %d\n   Frame pointer: %d\n", linkLayer.frameLength, linkLayer.frame);
                     linkLayer.frame[linkLayer.frameLength++] = F;
                     linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
                     linkLayer.frame[linkLayer.frameLength++] = *C;
                     linkLayer.frame[linkLayer.frameLength++] = BCC1;
-                    fprintf(stderr, "ReadCMD: Filled frame header\n");
                     if ( ch == ESC ) {
                         stuffing = true;
                         BCC2 = 0x00;
@@ -684,7 +727,7 @@ static bool readCMD(uint8_t * C) {
                     //bodyErrorTest = random_bool(0.30); //Gerador de erros em software no campo de dados
                     if( bodyErrorTest ) {
                         fprintf(stderr, "Erro aleatório, body tem erros\n");
-                        BCC2 += 1;
+                        BCC2 ^= 0x05;
                         bodyErrorTest = false;
                     }
                     BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1]; // Reverter, pois o ultimo é o BCC
@@ -860,13 +903,14 @@ static uint8_t generateBcc(const uint8_t * data, size_t size) {
 static void printRegister() {
     long milliseconds = (linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec)*1000 + (linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec)/1000;
     
-    fprintf(stderr, "/////////////////////////////////////\nNumber of Frames I sent: %d\nNumber of Frames I resent: %d\n", linkLayer.reg.numFramesI, linkLayer.reg.numFramesIResent);
-    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li milliseconds\n/////////////////////////////////////\n", 
-        linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, milliseconds); 
+    fprintf(stderr, "/////////////////////////////////////\n");
+    fprintf(stderr, "Number of Frames I sent: %d\nNumber of Frames I resent: %d\n", linkLayer.reg.numFramesI, linkLayer.reg.numFramesIResent);
+    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li milliseconds\n", linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, milliseconds); 
+    fprintf(stderr, "/////////////////////////////////////\n");
 }
 
 static bool random_bool(double probability) {
-    srand(time(0)+clock()+random());
+    srand(time(0)+ clock()+ random());
     double p_scaled = probability * ( (double)RAND_MAX+1) - rand();
     if ( p_scaled >= 1 ) return true;
     if ( p_scaled <= 0 ) return false;
