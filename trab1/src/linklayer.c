@@ -611,7 +611,7 @@ static bool readCMD(uint8_t * C) {
                 }
                 break;
             case C_RCV:
-                 headerErrorTest = random_bool(0.15);
+                 //headerErrorTest = random_bool(0.15); //Gerador de erros no header em software 15% probabilidade
                  if( headerErrorTest ) {   //Random error generator
                         fprintf(stderr, "Erro aleatório, header tem erros\n");
                         BCC1 += 5;
@@ -671,7 +671,7 @@ static bool readCMD(uint8_t * C) {
                     linkLayer.frameLength = 0;
                     stuffing = false;
                 } else if (ch == F) {
-                    //bodyErrorTest = random_bool(0.35);
+                    //bodyErrorTest = random_bool(0.35); //Gerador de erros em software no campo de dados
                     if( bodyErrorTest ) {
                         fprintf(stderr, "Erro aleatório, body tem erros\n");
                         BCC2 += 1;
