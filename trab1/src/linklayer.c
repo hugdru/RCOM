@@ -1,5 +1,5 @@
 #define _XOPEN_SOURCE
-#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 
 #include "linklayer.h"
 
@@ -36,8 +36,8 @@
 typedef struct{
     unsigned int numFramesI;
     unsigned int numFramesIResent;
-    unsigned int numTimeouts; 
-    unsigned int numREJ; 
+    unsigned int numTimeouts;
+    unsigned int numREJ;
     struct timeval startTime;
     struct timeval endTime;
 } Register;
@@ -51,7 +51,7 @@ typedef struct {
 
     uint8_t * frame;
     size_t frameLength;
-    
+
     Register reg;
 } LinkLayer;
 
@@ -129,7 +129,7 @@ int llinitialize(LinkLayerSettings *ptr, bool is_receiver) {
 
     if( (linkLayer.frame = (uint8_t *) malloc(linkLayer.settings->payloadSize + 6) ) == NULL) {
         fprintf(stderr, "Error in llinitialize(): malloc in Frame was unsuccessful\n");
-        return -1; 
+        return -1;
     }
     linkLayer.frameLength = 0;
 
@@ -151,7 +151,7 @@ int llopen(void) {
         fprintf(stderr, "You have to llinitialize first\n");
         return -1;
     }
-    
+
     /*
      Open serial port device for reading and writing and not as controlling tty
      because we don't want to get killed if linenoise sends CTRL-C.
@@ -259,7 +259,7 @@ int llopen(void) {
 int llwrite(uint8_t *packet, size_t packetSize) {
     size_t stuffedFrameSize;
     uint8_t * stuffedFrame = buildIFrame(packet, packetSize, &stuffedFrameSize);
-    if ( stuffedFrame == NULL ) 
+    if ( stuffedFrame == NULL )
         return -1;
 
     unsigned int tries = 0;
@@ -297,7 +297,7 @@ int llwrite(uint8_t *packet, size_t packetSize) {
             } else if ( C == C_DISC) {
                 fprintf(stderr, "llwrite(): Receiver failed, trying again\n");
                 break;
-            } else { 
+            } else {
                 fprintf(stderr, "Received an unexpected command\n");
             }
         }
@@ -359,7 +359,7 @@ uint8_t* llread(size_t *payloadSize) {
         alarm(linkLayer.settings->timeout);
         received = readCMD(&C);
         errno = 0;
-        
+
         if (tries == 0) previousC = C;
 
         if (received) {
@@ -407,7 +407,7 @@ uint8_t* llread(size_t *payloadSize) {
                     }
                     *payloadSize = tempSize;
                     linkLayer.sequenceNumber = changeSequenceNumber();
-                    if ( linkLayer.sequenceNumber == 0 ) 
+                    if ( linkLayer.sequenceNumber == 0 )
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
                     else
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
@@ -431,9 +431,9 @@ uint8_t* llread(size_t *payloadSize) {
                     fprintf(stderr, "LLread received valid disconnect\n");
                     goto cleanUp;
                 } else { // Recebeu uma trama de supervisão ou não numerada válida mas não esperada, ruído tramado!
-                    if ( linkLayer.sequenceNumber == 0 ) 
+                    if ( linkLayer.sequenceNumber == 0 )
                         res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
-                    else 
+                    else
                         res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
                     if (res < 1) {
                         tries++;
@@ -447,10 +447,10 @@ uint8_t* llread(size_t *payloadSize) {
         else tries = 0;
         previousC = C;
     }
-    
+
     fprintf(stderr, "errno Econnaborted\n");
     errno = ECONNABORTED;
-    
+
     cleanUp:
     if(uaCmd != NULL)
         free(uaCmd);
@@ -491,7 +491,7 @@ int llclose(void) {
             alarmed = false;
             if (linkLayer.is_receiver) {
                 res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
-                if (res < 1) { 
+                if (res < 1) {
                     tries++;
                     continue;
                 }
@@ -629,12 +629,12 @@ static bool readCMD(uint8_t * C) {
     State state = START;
     bool headerErrorTest = false;
     bool bodyErrorTest = false;
-      
+
     linkLayer.frameLength = 0;
 
     while (!alarmed) {
         res = read(linkLayer.serialFileDescriptor, &ch, 1);
-        
+
         if(res == 0)
             state = START;
         else if ( res == 1 ) {
@@ -670,7 +670,7 @@ static bool readCMD(uint8_t * C) {
                         BCC1 ^= 0x05;
                         headerErrorTest = false;
                  }
-                        
+
                 if (stuffing) { //Destuffing in run-time
                     stuffing = false;
                     if ((ch ^ STUFFING_XOR_BYTE) == BCC1) {
@@ -678,7 +678,7 @@ static bool readCMD(uint8_t * C) {
                     }
                     else
                          state = START;
-                         
+
                 } else if (ch == ESC) {
                     stuffing = true;
                 } else if (ch == BCC1) {
@@ -715,9 +715,9 @@ static bool readCMD(uint8_t * C) {
                 if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
                     fprintf(stderr, "This payload is invalid cause it exceeds the max number of bytes\n");
                     linkLayer.frameLength = 0;
-                    if (ch == F) 
+                    if (ch == F)
                         state = F_RCV;
-                    else 
+                    else
                         state = START;
                 } else if ( (ch == F) && stuffing ) {
                     state = F_RCV;
@@ -794,7 +794,7 @@ static uint8_t * stuff(uint8_t * packet, size_t size, size_t * stuffedSize) {
     if(BCC == ESC || BCC == F) {
         stuffed[j++] = ESC;
         stuffed[j] = BCC ^ STUFFING_XOR_BYTE;
-    } else 
+    } else
         stuffed[j] = BCC;
 
     return stuffed;
@@ -841,7 +841,7 @@ static uint8_t* buildFrameHeader(uint8_t A, uint8_t C, size_t *headerSize,
         header[i] = F;
 
     *headerSize = size;
-        
+
     return header;
 }
 
@@ -902,10 +902,10 @@ static uint8_t generateBcc(const uint8_t * data, size_t size) {
 
 static void printRegister() {
     long milliseconds = (linkLayer.reg.endTime.tv_sec-linkLayer.reg.startTime.tv_sec)*1000 + (linkLayer.reg.endTime.tv_usec-linkLayer.reg.startTime.tv_usec)/1000;
-    
+
     fprintf(stderr, "/////////////////////////////////////\n");
     fprintf(stderr, "Number of Frames I sent: %d\nNumber of Frames I resent: %d\n", linkLayer.reg.numFramesI, linkLayer.reg.numFramesIResent);
-    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li milliseconds\n", linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, milliseconds); 
+    fprintf(stderr, "Number of Timeouts: %d\nNumber of REJ: %d\nTime Spent: %li milliseconds\n", linkLayer.reg.numTimeouts, linkLayer.reg.numREJ, milliseconds);
     fprintf(stderr, "/////////////////////////////////////\n");
 }
 

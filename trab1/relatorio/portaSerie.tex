@@ -12,14 +12,14 @@
 \setlength{\textwidth}{16cm}
 \setlength{\textheight}{22cm}
 
-\title{\Huge\textbf{Protocolo de Comunicação}\linebreak\linebreak\linebreak
+\title{\Huge\textbf{Protocolo de Ligação de Dados}\linebreak\linebreak\linebreak
 \Large\textbf{Relatório \\ Trabalho1}\linebreak\linebreak
 \includegraphics[height=6cm, width=7cm]{feup.pdf}\linebreak \linebreak
 \Large{Mestrado Integrado em Engenharia Informática e Computação} \linebreak \linebreak
 \Large{Redes de Computadores}
 }
 
-\author{Hugo Ari Rodrigues Drumond \\ 201102900 --- hugo.drumond@fe.up.pt \\ José Pedro Pereira Amorim \\ 201206111 --- ei12190@fe.up.pt \\ João Ricardo Pintas Soares \\ 201200740 --- ei12039@fe.up.pt\linebreak\linebreak\linebreak \\
+\author{Hugo Ari Rodrigues Drumond --- 201102900 --- hugo.drumond@fe.up.pt \\ José Pedro Pereira Amorim --- 201206111 --- ei12190@fe.up.pt \\ João Ricardo Pintas Soares --- 201200740 --- ei12039@fe.up.pt\linebreak\linebreak\linebreak \\
  \\ Faculdade de Engenharia da Universidade do Porto \\ Rua Roberto Frias, 4200--65 Porto, Portugal \linebreak\linebreak\linebreak
 \linebreak\linebreak\vspace{1cm}}
 \maketitle
@@ -29,17 +29,24 @@
 
 \section{Introdução}
 %indicação dos objectivos do trabalho e do relatório; descrição da lógica do relatório com indicações sobre o tipo de informação que poderá ser encontrada em cada uma secções seguintes
-Este trabalho laboratorial teve como objetivo implementar um protocolo de ligação de dados e testá-lo com aplicação de transferência de ficheiros, elaborada no âmbito da unidade curricular de Redes de Computadores.
-Ao longo deste relatório, serão descritos os aspetos fundamentais do referido trabalho, permitindo obter um conhecimento detalhado deste. Será apresentada a arquitetura, estrtutura do código, casos de uso principais, protocolo de ligação lógica e de aplicação. No mesmo sentido, serão apresentadas a validação dos resultados e os elementos de valorização.
+Este trabalho laboratorial, desenvolvido no âmbito da Unidade Curricular de Redes de Computadores (RCOM), teve como objetivo implementar um protocolo de ligação de dados, do tipo acknowledged connection-oriented, e testá-lo em diversas situações de stress de modo a verificar a sua robustez.
+Ao longo deste relatório, serão descritos os aspetos fundamentais do referido trabalho, permitindo obter um conhecimento detalhado deste. Será apresentada a arquitetura, estrutura do código, casos de uso principais, protocolo de ligação lógica e de aplicação. No mesmo sentido, serão apresentadas a validação dos resultados e os elementos de valorização.
 
 \section{Arquitectura}
 %blocos funcionais e interfaces
 
 \section{Estrutura do código}
 %APIs, principais estruturas de dados, principais funções e sua relação com a arquitetura
+\centerline{\includegraphics[scale=0.70]{organizacaoFicheirosECodigo.png}}
 
 \section{Casos de uso}
 %identificação; sequências de chamada de funções
+O utilizador só pode interagir com a nossa aplicação através da linha de comandos. Criámos um caso de usos bastante completo, que permite ao utilizador mudar todas as opções do linkLayer e da applicacationLayer, que têm impacto na transferência de dados. Para além disso, o parser aceita um número ilimitado de portas séries quer sejam destinadas a receber ou enviar, e as respetivas configurações. Cada uma separada com o símbolo +. Para ver quais as opções que a nossa aplicação suporta basta corrê-la com a opção -h, serius -h. Também incluímos alguns exemplos de uso. Lá podemos encontrar o nome Bundle que basicamente significa um conjunto de opções (Options:) para uma dada porta série que opera de uma dada maneira (Mode:), receptor ou emissor. Por exemplo:\\\newline serius -d'/dev/tty100' -b115200 -t4 -r10 -f150 -s90 -S'pinguim.gif' + -d'/dev/tty200' -S'pinguim.gif'\\\newline
+Neste exemplo, os seguintes settings são aplicados na porta série tty100: baudrate, timeout, retries, tamanho máximo do payload (unstuffed) e o tamanho máximo da parte dos dados do pacote de informação. E na tty200 os defaults são usados para todas essas opções e para as restantes. Em ambos os casos as portas série atuam como emissoras e enviam o ficheiro pinguim.gif para possivelmente computadores diferentes. Um dos computadores receptores teria um processo serius iniciado com os seguintes argumentos:\\\newline serius -d '/dev/tty300' -b 115200 -D\\ Cria um ficheiro com o nome que vem no pacote de controlo start, e coloca lá a informação que recebe. \\\newline E o outro:\\\newline serius -d '/dev/tty400' -R 'received.gif' \\\newline
+De início, tínhamos em mente correr cada Bundle numa thread. Possibilitando transferir/receber de várias fontes simultâneamente via porta série, no entanto, não houve tempo para o fazer. O mesmo sucedeu com as pipes e a redireção da shell, cuja ideia era respetivamente: enviar informação acabada de ser processada; e, método alternativo de guardar ficheiros ou de os receber. \\\newline
+\textbf{Diagrama de casos de uso:} \\\newline
+
+\includegraphics[scale=0.5]{useCases.png}
 
 \section{Protocolo de ligação lógica}
 %identificação dos principais aspectos funcionais; descrição da estratégia de implementação destes aspectos com apresentação de extratos de código

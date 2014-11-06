@@ -26,12 +26,12 @@ void print_usage(char **argv) {
         ++ptr;
 
     fprintf(stderr, "\nSends or Receives data from a given serial port");
-    fprintf(stderr, "\nUsage: %s [NTUNNELS] ([OPTIONS] MODE)*\n", ptr);
+    fprintf(stderr, "\nUsage: %s [NBUNDLES] ([OPTIONS] MODE)*\n", ptr);
 
-    fprintf(stderr, "\nNTUNNELS:");
+    fprintf(stderr, "\nNBUNDLES:");
     fprintf(stderr,
             "\n -N number\tNumber of Bundles to create, defaults to 1\n");
-    fprintf(stderr, "\n +\t\tTunnel (OPTIONS MODE) seperator\n");
+    fprintf(stderr, "\n +\t\tBundle (OPTIONS MODE) seperator\n");
 
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr,
@@ -136,7 +136,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
     /*fprintf(stderr, "Could not compile regex\n");*/
     /*return NULL;*/
     /*}*/
-    // Parse stuff for each Tunnel
+    // Parse stuff for each Bundle
     subArgv = argv;
     subArgc = argc;
     oldSubArgv = argv;
@@ -168,7 +168,7 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
                 }
             } else if (c == 'S' || c == 'R' || c == 'x' || c == 'm' || c == 'D') {
                 if (ioSet) {
-                    fprintf(stderr, "There can only be a mode for each tunnel");
+                    fprintf(stderr, "There can only be a mode for each bunnel");
                     return NULL;
                 }
                 ioSet = true;

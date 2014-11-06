@@ -4,12 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "linklayer.h" // So para tests
-
-#define IS_RECEIVER(n) (!((n)>>4)) // So para tests
-#define IS_TRANSMITTER(n) ((n)>>4) // So para tests
-
-void wipeBundles(void);
+static void wipeBundles(void);
 
 Bundle **Bundles= NULL;
 size_t NBundles = 0;
@@ -69,7 +64,7 @@ cleanUp:
     return -1;
 }
 
-void wipeBundles(void) {
+static void wipeBundles(void) {
     size_t i;
 
     if ( Bundles == NULL || NBundles == 0 ) return;
