@@ -107,3 +107,4 @@
 # xindy
 **/*.xdy
 !**/.gitignore
+**/relatorio/portaSerie.pdf
