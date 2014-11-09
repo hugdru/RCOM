@@ -131,11 +131,60 @@ que guarda ocorrências.
 
 \subsection{Funções}
 \subsubsection{linklayer}
-\textbf{static bool readCMD(uint8\_t * C);}
+\textbf{\textit{static bool readCMD(uint8\_t * C);}}\\
+Esta é a função mais importante do nosso código, e tem o objetivo de reconhecer
+qualquer comando válido, seja ele uma trama de dados ou de controlo. É
+retornado true se for encontrada uma sequência de bytes válida, isto é, uma
+trama bem formada em todos os sentidos; *C é preenchido com o tipo de comando
+quando estamos no estado apropriado,
+por exemplo: C\_DISC, C\_UA, C\_I\_N, C\_RR, etc.
+Progredi-se na máquina de estados quando há um byte bom. Ou retrocede-se
+quando há algum byte não esperado. O destuffing, tal como a integridade dos
+dados é verificada nesta função. Há uma divergência na máquina de estados que é
+consequência de haver dois tipos de tramas. Quando estamos nesse estado e
+recebemos um F, e sendo *C um comando da trama de controlo é retornado true,
+que simboliza que foi recebido uma sequência válido no tempo configurado para o
+alarm. De forma semelhante, é feita a verificação para o caso da trama de
+informação. Se estivermos no estado divergente e se *C for um comando válido
+para essa trama e o byte recebido for diferente de F dá-se início ao processo
+de preenchimento do membro frame da estrutura linkLayer. Sem stuffing mas com
+todos os bytes constituintes da trama. É também nesta parte do código onde se
+pode gerar erros de teste nas tramas com um dada probabilidade. A estratégia
+tomada foi alterar o BBC1(Header) ou o BBC2(Body) no caso da função de
+probabilidade \textit{random\_bool(double probabilidade)} tiver retornado true.
+As tramas de Informação com o cabeçalho bom mas com BBC errado no campo de
+dados são tratadas de forma especial. É também retornado true, no entanto o
+llread terá de verificar se o último caracter da trama lida (linkLayer.frame) é
+F ou não. Porque o F só é adicionado no caso de a trama não tiver erros
+derivados de ruído. Cabe ao llread e ao llwrite decidir o que fazer, consoante
+o tipo de comandos que recebem.\linebreak
+
+\noindent\textbf{\textit{int llinitialize(LinkLayerSettings *ptr, bool
+is\_receiver);}}\\
+
+\noindent\textbf{\textit{int llopen(void);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{uint8\_t* llread(size\_t *payloadSize);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{int llwrite(uint8\_t *packet, size\_t packetSize);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{int llclose(void);}}\\
 
 \subsubsection{applayer}
+\noindent\textbf{\textit{int initAppLayer(Bundle *bundle);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{static int read(void);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{static int write(void);}}\\
 
 \subsubsection{parser}
+
+\noindent\textbf{\textit{Bundle** parse\_args(int argc, char **argv, size\_t *NBundles)}}\\
 
 \section{Casos de uso}
 %identificação; sequências de chamada de funções
@@ -173,18 +222,26 @@ haver espaços, -b115200 = -b 115200.
 \section{Protocolo de ligação lógica}
 %identificação dos principais aspectos funcionais; descrição da estratégia de
 %implementação destes aspectos com apresentação de extratos de código
+Falar sobre a máquina de estados; poupança de ciclos for, destuffing e bbc; mostrar o código da máquina de
+estados, llwrite, llread. Ligação entre funções do linklayer
 
 \section{Protocolo de aplicação}
 %identificação dos principais aspectos funcionais; descrição da estratégia de
 %implementação destes aspectos com apresentação de extractos de código
+Falar sobre ter uma só função public; pacote start, pacote end; ligação entre
+funções da applayer
 
 \section{Validação}
 %descrição dos testes efectuados com apresentação quantificada dos resultados,
 %se possível
+falar sobre os printfs; tentativa de fazer debugging com break points;
+vericacao da implementacao atraves de portas serie virtuais, socat; e nos pcs
+da feup
 
 \section{Elementos de valorização}
 %identificação dos elementos de valorização implementados; descrição da
 %estratégia de implementação com apresentação de pequenos extratos de código
+Fizemos todos falar e mostrar cada um deles
 
 \section{Conclusões}
 %síntese da informação apresentada nas secções anteriores; reflexão sobre os
