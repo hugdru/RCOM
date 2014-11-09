@@ -1,20 +1,23 @@
 \documentclass[a4paper]{article}
 
 \usepackage[portuguese]{babel} \usepackage[utf8]{inputenc}
-\usepackage{indentfirst} \usepackage{graphicx} \usepackage{verbatim}
+%\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{verbatim}
 \usepackage[T1]{fontenc}
 \usepackage{wrapfig}
+\usepackage[tmargin=1.2in,bmargin=1in]{geometry}
 
 \begin{document}
 
 \setlength{\textwidth}{16cm} \setlength{\textheight}{22cm}
 
 \title{\Huge\textbf{Protocolo de Ligação de
-    Dados}\linebreak\linebreak\linebreak \Large\textbf{Relatório \\
-    Trabalho1}\linebreak\linebreak \includegraphics[height=6cm,
+    Dados}\linebreak\linebreak\linebreak\linebreak \Large\textbf{Relatório \\
+    Trabalho1}\linebreak\linebreak\linebreak\includegraphics[height=6cm,
     width=7cm]{feup.pdf}\linebreak \linebreak \Large{Mestrado Integrado em
-    Engenharia Informática e Computação} \linebreak \linebreak \Large{Redes de
-Computadores} }
+    Engenharia Informática e Computação} \linebreak \linebreak \Large\textbf{Redes de
+Computadores}\linebreak}
 
 \author{Hugo Ari Rodrigues Drumond --- 201102900 --- hugo.drumond@fe.up.pt \\
     José Pedro Pereira Amorim --- 201206111 --- ei12190@fe.up.pt \\ João
@@ -45,44 +48,94 @@ resultados e os elementos de valorização.
 O nosso software foi desenvolvido de maneira a tirar o máximo proveito da
 estratégia de encapsulamento. O que permite: modificar, fazer novas
 implementações, alterar técnicas de integridade de dados, etc, sem que haja
-incompatibilidades ou quebra das interfaces de cada camada. Embora esta ideia de isolamento
-tenha surgido nas linguagens de programação orientadas a objetos, o código em C
-permite seguir este ideal pelo uso da palavra static. Tal, faz com que um
-elemento só seja visível no ficheiro onde está declarado e definido. A técnica
-usada pelo nosso código foi declarar a API (funções e estruturas de retorna de
-informação public) de cada camada (classe) nos headers. E, nos respetivos ficheiros de código
-fazer a definição da API\@; e a declaração e definição das funções e estruturas
-auxiliares e de controlo com a palavra static (private).
+incompatibilidades ou quebra das interfaces de cada camada. Embora esta ideia
+de isolamento tenha surgido nas linguagens de programação orientadas a objetos,
+o código em C permite seguir este ideal pelo uso da palavra static. Tal, faz
+com que um elemento só seja visível no ficheiro onde está declarado e definido.
+A técnica usada pelo nosso código foi declarar a API (funções e estruturas de
+retorna de informação public) de cada camada (classe) nos headers. E, nos
+respetivos ficheiros de código fazer a definição da API\@; e a declaração e
+definição das funções e estruturas auxiliares e de controlo com a palavra
+static (private).
 \\\newline\textbf{Resultando no seguinte esboço arquitectural:}\\\newline
 \centerline{\includegraphics{API.png}}
 
 \section{Estrutura do código}
 %APIs, principais estruturas de dados, principais funções e sua relação com a
 %arquitetura
-\textbf{Estruturas:}\\
-\begin{wrapfigure}{r}{0.3\textwidth}
-  \begin{center}
-    \includegraphics[width=0.45\textwidth]{bundleStruct.png}
-    \includegraphics[width=0.45\textwidth]{status.png}
-  \end{center}
-\end{wrapfigure}
-No \textit{bundle.h} encontra-se uma estrutura chamada Bundle cujo
-objetivo é guardar os settings que recebemos da linha de comandos.
-O name é um nome a que queremos chamar ao Bundle, e as estruturas
-constituintes do Bundle são para os settings de cada camada. O
-LinkLayerSettings está declarado no ficheiro linklayersettings.h e contem os
-seguintes argumentos: port, timeout, numAttempts, payloadSize e baudrate.
-O AppLayerSettings está declarado no ficheiro applayersettings.h e contem os
-seguintes argumentos: status, packetBodySize, filename e um union Io que pode
-ser um apontador para um ficheiro, para uma string ou nulo. Para alem disso,
-encontram-se lá defines que o parser usa para indicar como aceder ao Union Io e
-qual o modo de operação.\\\newline
 
-
-
-
+\subsection{Organização dos ficheiros e código}
 \centerline{\includegraphics[scale=0.70]{organizacaoFicheirosECodigo.png}}
 
+\subsection{Estruturas}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.45\textwidth]{bundleStruct.png}
+    \caption{Estrutura Bundle presente no ficheiro \textit{bundle.h}}
+\end{figure}
+No \textit{bundle.h} encontra-se uma estrutura chamada Bundle cujo objetivo é
+guardar os settings que recebemos da linha de comandos. O name é um nome a que
+queremos chamar ao Bundle, e as estruturas constituintes do Bundle são para os
+settings de cada camada. O LinkLayerSettings está declarado no ficheiro
+\textit{linklayersettings.h} e contem os seguintes argumentos: port, timeout,
+numAttempts, payloadSize e baudrate.
+\begin{figure}[h]
+\centering
+    \includegraphics[width=0.45\textwidth]{status.png}
+    \caption{Defines modo de operação e tipo IO no ficheiro
+    applayersettings.h}
+\end{figure}\\
+O AppLayerSettings está declarado no
+ficheiro \textit{applayersettings.h} e contem os seguintes argumentos: status,
+packetBodySize, filename e um union Io que pode ser um apontador para um
+ficheiro, para uma string ou nulo. Para alem disso, encontram-se lá defines que
+o parser usa para indicar como aceder ao Union Io e qual o modo de
+operação.\\\newline
+
+As estruturas mais importantes do nosso programa são: Applayer e LinkLayer.
+Estão presentes, respetivamente, nos ficheiros: \textit{applayer.c} e
+\textit{linklayer.c}.\\
+\begin{figure}[h]
+\centering
+    \includegraphics[width=0.45\textwidth]{applayerStruct.png}
+    \caption{Estrutura AppLayer presente no ficheiro applayer.c}
+\end{figure} \\
+Na estrutura Applayer: usamos sequenceNumber para que
+possamos identificar se houve algum pacote de dados perdido, e se tal acontecer
+recuperar desse erro; fileSize é preenchido com o tamanho do ficheiro a
+transmitir ou vai sendo atualizado consoante vamos recebendo informação para
+depois compararmos com o pacote de controlo que vêm no fim; e, *settings que
+aponta para um estrutura AppLayerSettings que foi preenchida pelo parser.\\
+\begin{figure}[h]
+\centering
+    \includegraphics[width=0.45\textwidth]{linklayerStruct.png}
+    \caption{Estrutura LinkLayer presente no ficheiro linklayer.c}
+\end{figure}
+\\ No
+caso de LinkLayer: is\_receiver indica o modo de operação; sequenceNumber, a
+trama de informação esperada ou a enviar; serialFileDescriptor, o descritor da
+porta série aberta; oldtio, informação da porta série a ser reposta no fim da
+conexão; *settings, apontador para uma estrutura do tipo LinkLayerSettings onde
+se encontram as configurações passadas pela linha de comandos que só interessam
+a esta camada; *frame, apontador para uma trama de informação unstuffed criada
+na função llinitialize() com o tamanho máximo esperado; frameLength, tamanho da
+trama de informação recebida; finalmente, temos uma estrutura chamada Register
+que guarda ocorrências.
+
+%\begin{wrapfigure}{R}{0.45\textwidth}
+%\centering
+    %\includegraphics[width=0.45\textwidth]{registerStruct.png}
+    %\caption{Estrutura de registo de ocorrências presente no ficheiro
+    %linklayer.c}
+%\end{wrapfigure}
+
+\subsection{Funções}
+\subsubsection{linklayer}
+\textbf{static bool readCMD(uint8\_t * C);}
+
+\subsubsection{applayer}
+
+\subsubsection{parser}
 
 \section{Casos de uso}
 %identificação; sequências de chamada de funções
@@ -112,8 +165,8 @@ numa thread. Possibilitando transferir/receber de várias fontes simultâneament
 via porta série, no entanto, não houve tempo para o fazer. O mesmo sucedeu com
 as pipes e a redireção da shell, cuja ideia era respetivamente: enviar
 informação acabada de ser processada; e, método alternativo de guardar
-ficheiros ou de os receber.\\Entre a opção e o argumento tanto faz haver
-ou nao haver espaços, -b115200 = -b 115200.
+ficheiros ou de os receber.\\Entre a opção e o argumento tanto faz haver ou nao
+haver espaços, -b115200 = -b 115200.
 \\\newline\textbf{Diagrama de casos de uso:}\\\newline
 \centerline{\includegraphics[scale=0.6]{useCases.png}}
 
