@@ -503,8 +503,8 @@ static bool readCMD(uint8_t * C) {
 }
 \end{verbatim}
 
-Como podemos constatar a máquina de estados fica um pouco complexa, nesta
-função. Ao invés das outras funções do linkLayer.\\
+Como podemos constatar esta função fica um pouco complexa.Ao invés das outras
+funções do linkLayer.\\
 
 \begin{verbatim}
 int llwrite(uint8_t *packet, size_t packetSize) {
@@ -763,26 +763,338 @@ int llclose(void) {
 }
 \end{verbatim}
 
-Falar sobre a máquina de estados; poupança de ciclos for, destuffing e bbc; mostrar o código da máquina de
-estados, llwrite, llread. Ligação entre funções do linklayer
+Todas as funções que não estão aqui, tirando a \textit{llinitialize}, têm o
+propósito de auxiliar a API do linkLayer. Foram removidas as declarações das
+variáveis, criação das tramas, limpeza da memória alocada, tratamento de erros,
+etc, de modo a não sobrecarregar o relatório.
+%Falar sobre a máquina de estados; poupança de ciclos for, destuffing e bbc;
+%mostrar o código da máquina de estados, llwrite, llread. Ligação entre funções
+%do linklayer
 
 \section{Protocolo de aplicação}
 %identificação dos principais aspectos funcionais; descrição da estratégia de
 %implementação destes aspectos com apresentação de extractos de código
-Falar sobre ter uma só função public; pacote start, pacote end; ligação entre
-funções da applayer
+A appLayer só necessita de ter uma função public visto que só tem de receber os
+settings do parser. A partir daí a appLayer agarra a execução até haver uma
+saturação do número de tentativas para a transferência do ficheiro(recuperação
+em caso de erros), ou caso acha sucesso na transmissão/recepção.
+
+\begin{verbatim}
+int initAppLayer(Bundle *bundle) {
+
+    ...
+
+    for (tries = 0; tries < bundle->llSettings.numAttempts; ++tries) {
+        llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
+
+        if(tries > 0)
+            fprintf(stderr, "Recuperação de erro: %d\n", tries);
+
+        if ( llopen() != 0 ) {
+            fprintf(stderr, "Error: llopen()\n");
+            llclose();
+            continue;
+        }
+        else fprintf(stderr, "llopen() was successful\n\n");
+
+        appLayer.sequenceNumber = 0;
+
+        if ( IS_RECEIVER(appLayer.settings->status) ) {
+            res = read();
+            if ( res != 0 ) {
+                fprintf(stderr, "There was an error in applayer read function\n");
+                llclose();
+                continue;
+            }
+        } else {
+            res = write();
+            if ( res != 0 ) {
+                fprintf(stderr, "There was an error in applayer write function\n");
+                llclose();
+                continue;
+            }
+        }
+
+        if( llclose() != 0) {
+            fprintf(stderr, "Error: llclose(), going to exit\n");
+                return -1;
+        }
+        else fprintf(stderr, "llclose() was successful\n");
+
+        break;
+    }
+
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE || \
+         appLayer.settings->status == STATUS_RECEIVER_FILE )
+        fclose(appLayer.settings->io.fptr);
+
+    if (tries < bundle->llSettings.numAttempts) {
+         fprintf(stderr, "\n\nO ficheiro foi transferido com sucesso!\
+         \nNúmero de tentativas: %d\n", tries);
+    }
+    else {
+         fprintf(stderr, "\n\nO ficheiro não conseguiu transferido!\n");
+    }
+
+    return 0;
+}
+\end{verbatim}
+
+\begin{verbatim}
+static int read(void) {
+    uint8_t *packet;
+    size_t packetSize;
+    size_t i;
+
+    while (1) {
+        packet = llread(&packetSize);
+        if ( errno != 0 ) {
+            fprintf(stderr, "AppRead received llread with error\n");
+            return -1;
+        } else {
+            if ( packet == NULL ) {
+                fprintf(stderr, "AppRead received disconnect from llread\n");
+                return 0;
+            } else {
+                fprintf(stderr, "AppRead packet: ");
+                for (i = 0; i < packetSize; i++) {
+                    fprintf(stderr, "%X", packet[i]);
+                }
+                fprintf(stderr, "\n");
+                if ( parserPacket(packet, packetSize) != 0 ) {
+                    fprintf(stderr, "AppRead parserPacket failed\n");
+                    return -1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+\end{verbatim}
+
+\begin{verbatim}
+static int write(void) {
+    size_t res;
+    bool end = false;
+    uint8_t data[appLayer.settings->packetBodySize];
+    size_t stringSize, lidos = 0;
+    size_t databytesWritten = 0;
+
+    if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING )
+        stringSize = strlen(appLayer.settings->io.chptr) + 1;
+    else if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
+        if ( writeStartPacket() != 0 ) {
+            fprintf(stderr, "writeStartPacket Failed\n");
+            return -1;
+        }
+        rewind(appLayer.settings->io.fptr);
+    }
+
+    while ( !end ) {
+        if ( appLayer.settings->status == STATUS_TRANSMITTER_FILE ) {
+            res = fread(data, 1, appLayer.settings->packetBodySize, appLayer.settings->io.fptr);
+            if ( feof(appLayer.settings->io.fptr) ) {
+                fprintf(stderr, "AppWrite Reached end of file\n");
+                end = true;
+            } else if ( ferror(appLayer.settings->io.fptr) ) {
+                fprintf(stderr, "AppWrite error occurred in fread\n");
+                return -1;
+            } else {
+                fprintf(stderr, "AppWrite Res: %lu\n", res);
+                fprintf(stderr, "AppWrite packet data: ");
+                fprintf(stderr, "%.*s\n", (int)res, data);
+            }
+        } else if ( appLayer.settings->status == STATUS_TRANSMITTER_STRING ) {
+            if ( (res = stringSize - lidos) <= appLayer.settings->packetBodySize ) {
+                memcpy(data, appLayer.settings->io.chptr+lidos, res);
+                fprintf(stderr, "AppWrite Reached end of string\n");
+                end = true;
+            } else {
+                memcpy(data, appLayer.settings->io.chptr+lidos, \
+                appLayer.settings->packetBodySize);
+                lidos += appLayer.settings->packetBodySize;
+                res = appLayer.settings->packetBodySize;
+            }
+            fprintf(stderr, "AppWrite packet: %s\n", data);
+        } else {
+            // Por fazer, ler stream
+            // Não vai chegar aqui porque retorna -1 no llinitialize
+            // Fiz dessa maneira pq talvez não vai dar tempo para implementar
+        }
+        if ( res != 0 ) {
+            if ( writeDataPacket(data, res) == -1 ) {
+                fprintf(stderr, "AppWrite Number of data bytes written so far: \
+                %lu\n", databytesWritten);
+                fprintf(stderr, "AppWrite failed\n");
+                return -1;
+            }
+            databytesWritten += res;
+        }
+    }
+
+    // Envia o tamanho do ficheiro ou da string
+    if ( writeEndPacket() != 0 ) {
+        fprintf(stderr, "writeEndPacket failed");
+        return -1;
+    }
+
+    fprintf(stderr, "\n\nAppWrite Number of bytes Written: %lu\n\n", databytesWritten);
+    return 0;
+}
+\end{verbatim}
 
 \section{Validação}
 %descrição dos testes efectuados com apresentação quantificada dos resultados,
 %se possível
-falar sobre os printfs; tentativa de fazer debugging com break points;
-vericacao da implementacao atraves de portas serie virtuais, socat; e nos pcs
-da feup
+A técnica de teste dos programas foi feita à medida em que o código ia sendo
+escrito. Na maior parte das vezes através de printfs. No entanto, também usámos
+o gdb para testar o parser e algumas outras partes do código. Ademais, muitas
+vezes tentámos isolar funções para tentar testá-las até à exaustão, por exemplo
+mandando umas quantas strings e depois fazendo diffs. De início configurámos duas
+máquinas virtuais para correr os testes, no entanto, isso provou ser bastante
+chato. Por essa razão, encontrámos um software chamado socat que cria portas
+série virtuais. sudo socat PTY,link=/dev/tty100,echo=0
+PTY,link=/dev/tty200,echo=0 \&. Foi só na semana da apresentação que testámos o
+nosso software no metal, felizmente funcionou tudo como ansiávamos.
+
+%falar sobre os printfs; tentativa de fazer debugging com break points;
+%vericacao da implementacao atraves de portas serie virtuais, socat; e nos pcs
+%da feup
 
 \section{Elementos de valorização}
 %identificação dos elementos de valorização implementados; descrição da
 %estratégia de implementação com apresentação de pequenos extratos de código
-Fizemos todos falar e mostrar cada um deles
+A seleção de parâmetros pelo utilizador por feita muito para além das exigências
+pedidas.
+\begin{verbatim}
+Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
+
+    ...
+
+    for (i = 0; i < *NBundles; ++i) {
+        ioSet = false;
+        if (*NBundles != 1) {
+            subArgc = 0;
+            oldSubArgv = subArgv;
+            while ((subArgv < (argv + argc))
+                    && ((strncmp(*subArgv, "+", 1) != 0) || subArgc == 0)) {
+                ++subArgv;
+                ++subArgc;
+            }
+        }
+
+        if ((i == 0) && (subArgc == argc) && (*NBundles != 1)) {
+            errno = EINVAL;
+            return NULL;
+        }
+
+        while ((c = getopt((int) subArgc, oldSubArgv, "N:b:d:t:r:n:S:R:m:f:s:xhD"))
+                != -1) {
+
+            if (c == 'b' || c == 't' || c == 'r' || c == 'f' || c == 's') {
+                parsedNumber = parse_ulong(optarg, 10);
+                if (parsedNumber == ULONG_MAX) {
+                    fprintf(stderr, "-%c must be followed by a number\n", c);
+                    return NULL;
+                }
+            } else if (c == 'S' || c == 'R' || c == 'x' || c == 'm' || c == 'D') {
+                if (ioSet) {
+                    fprintf(stderr, "There can only be a mode for each bunnel");
+                    return NULL;
+                }
+                ioSet = true;
+            }
+
+            switch (c) {
+            case 'N':
+                if (checkNDuplication > 1) {
+                    fprintf(stderr, "There can only be a -N option");
+                    errno = EINVAL;
+                    return NULL;
+                }
+                ++checkNDuplication;
+                break;
+            case 'b':
+                Bundles[i]->llSettings.baudRate = (tcflag_t) parsedNumber;
+                break;
+            case 'd':
+                /* Regex testing */
+                /*retn = regexec(&deviceRegex, optarg, 0, NULL, 0);*/
+                /*if ( retn == REG_NOMATCH || retn != 0 ) {*/
+                /*fprintf(stderr, "Not a proper device file, expected /dev/ttyS[0-9]+");*/
+                /*errno = EINVAL;*/
+                /*return NULL;*/
+                /*}*/
+                Bundles[i]->llSettings.port = optarg;
+                break;
+            case 't':
+                Bundles[i]->llSettings.timeout = (unsigned int) parsedNumber;
+                break;
+            case 'r':
+                Bundles[i]->llSettings.numAttempts =
+                        (unsigned int) parsedNumber;
+                break;
+            case 'n':
+                Bundles[i]->name = optarg;
+                break;
+            case 'S':
+                if ((Bundles[i]->alSettings.io.fptr = fopen(optarg, "rb"))
+                        == NULL) {
+                    fprintf(stderr, "Error opening the file for reading\n");
+                    return NULL;
+                }
+                Bundles[i]->alSettings.status = STATUS_TRANSMITTER_FILE;
+                ptr = strrchr(optarg, '/');
+                if (ptr == NULL)
+                    Bundles[i]->alSettings.fileName = optarg;
+                else
+                    Bundles[i]->alSettings.fileName = ++ptr;
+                break;
+            case 'R':
+                if ((Bundles[i]->alSettings.io.fptr = fopen(optarg, "w+b"))
+                        == NULL) {
+                    fprintf(stderr, "Error opening the file for writing\n");
+                    return NULL;
+                }
+                Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE;
+                ptr = strrchr(optarg, '/');
+                if (ptr == NULL)
+                    Bundles[i]->alSettings.fileName = optarg;
+                else
+                    Bundles[i]->alSettings.fileName = ++ptr;
+                break;
+            case 'm':
+                Bundles[i]->alSettings.io.chptr = optarg;
+                Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STRING;
+                break;
+            case 'f':
+                Bundles[i]->llSettings.payloadSize =
+                        (unsigned int) parsedNumber;
+                break;
+            case 's':
+                Bundles[i]->alSettings.packetBodySize =
+                        (unsigned int) parsedNumber;
+                break;
+            case 'x':
+                Bundles[i]->alSettings.status = STATUS_TRANSMITTER_STREAM;
+                break;
+            case 'D':
+                Bundles[i]->alSettings.status = STATUS_RECEIVER_FILE_RECEIVED_NAME;
+                break;
+            default:
+                errno = EINVAL;
+                return NULL;
+                break;
+            }
+        }
+        optind = 1;
+        if (!ioSet)
+            Bundles[i]->alSettings.status = STATUS_RECEIVER_STREAM;
+    }
+
+    return Bundles;
+}
+\end{verbatim}
 
 \section{Conclusões}
 %síntese da informação apresentada nas secções anteriores; reflexão sobre os
