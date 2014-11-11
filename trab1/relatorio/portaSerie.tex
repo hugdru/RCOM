@@ -366,6 +366,186 @@ Também foi tido em atenção o performance da aplicação, por exemplo: na fun�
 nova informação, isto permite reduzir o número de ciclos. Usamos esta técnica
 em todos os casos.
 
+\textit{Ver Anexo 1}
+
+\section{Protocolo de aplicação}
+%identificação dos principais aspectos funcionais; descrição da estratégia de
+%implementação destes aspectos com apresentação de extractos de código
+A appLayer só necessita de ter uma função public visto que só tem de receber os
+settings do parser. A partir daí a appLayer agarra a execução até haver uma
+saturação do número de tentativas para a transferência do ficheiro(recuperação
+em caso de erros), ou caso acha sucesso na transmissão/recepção.
+
+\textit{Ver Anexo 2}
+
+\section{Validação}
+%descrição dos testes efectuados com apresentação quantificada dos resultados,
+%se possível
+A técnica de teste dos programas foi feita à medida em que o código ia sendo
+escrito. Na maior parte das vezes através de printfs. No entanto, também usámos
+o gdb para testar o parser e algumas outras partes do código. Ademais, muitas
+vezes tentámos isolar funções para tentar testá-las até à exaustão, por exemplo
+mandando umas quantas strings e depois fazendo diffs. De início configurámos duas
+máquinas virtuais para correr os testes, no entanto, isso provou ser bastante
+chato. Por essa razão, encontrámos um software chamado socat que cria portas
+série virtuais. sudo socat PTY,link=/dev/tty100,echo=0
+PTY,link=/dev/tty200,echo=0 \&. Foi só na semana da apresentação que testámos o
+nosso software no metal, felizmente funcionou tudo como ansiávamos.
+
+%falar sobre os printfs; tentativa de fazer debugging com break points;
+%vericacao da implementacao atraves de portas serie virtuais, socat; e nos pcs
+%da feup
+
+\section{Elementos de valorização}
+%identificação dos elementos de valorização implementados; descrição da
+%estratégia de implementação com apresentação de pequenos extratos de código
+\noindent\textbf{A seleção de parâmetros pelo utilizador}\\\textit{Ver anexo
+3}\\
+
+\noindent\textbf{Geração de erros aleatório no cabeçalho e no body}
+\begin{verbatim}
+static bool readCMD(uint8_t * C) {
+            ...
+                        state = START;
+                }
+                break;
+            case C_RCV:
+                 //Gerador de erros no header em software 15% probabilidade
+                 headerErrorTest = random_bool(0.15);
+                 if( headerErrorTest ) {   //Random error generator
+                        fprintf(stderr, "Erro aleatório, header tem erros\n");
+                        BCC1 ^= 0x05;
+                        headerErrorTest = false;
+                 }
+            ...
+}
+\end{verbatim}
+
+\begin{verbatim}
+static bool readCMD(uint8_t * C) {
+            ...
+            case RCV_I:
+                ...
+                } else if (ch == F) {
+                    //Gerador de erros em software no campo de dados
+                    bodyErrorTest = random_bool(0.30);
+                    if( bodyErrorTest ) {
+                        fprintf(stderr, "Erro aleatório, body tem erros\n");
+                        BCC2 ^= 0x05;
+                        bodyErrorTest = false;
+                    }
+            ...
+}
+\end{verbatim}
+\noindent\textbf{Implementação de REJ}
+\begin{verbatim}
+static bool readCMD(uint8_t * C) {
+            ...
+            case RCV_I:
+                ...
+                } else if (ch == F) {
+                    ...
+                    // Reverter, pois o ultimo é o BCC
+                    BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1];
+                    if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
+                        linkLayer.frame[linkLayer.frameLength++] = ch;
+                        fprintf(stderr, "Received Frame I, Length: %lu\n", \
+                        linkLayer.frameLength);
+                    }
+                    return true;
+                    // Uma vez que tem o cabeçalho da header válido, Rej e RR,
+                    // fora ele verifica se o último elemento é F ou não
+                ...
+}
+\end{verbatim}
+
+\begin{verbatim}
+uint8_t* llread(size_t *payloadSize) {
+            ...
+            if (blockedSet) {
+                if ( (C == (C_I_RAW | (linkLayer.sequenceNumber << 6))) && \
+                (linkLayer.frame[linkLayer.frameLength-1] != F) ) { //REJ
+                    fprintf(stderr, "Cabeça da trama I boa, resto mau, mesma sequência -> rej\n");
+                    linkLayer.reg.numREJ++;
+                    if (linkLayer.sequenceNumber)
+                        res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                    linkLayer.reg.numFramesIResent++;
+                } else if ( (C == (C_I_RAW | (changeSequenceNumber() << 6))) && \
+                (linkLayer.frame[linkLayer.frameLength-1] != F) ) { //RR
+                    fprintf(stderr, "Cabeça da trama I boa, resto mau,\
+                    sequência diferente -> rr\n");
+                    if (linkLayer.sequenceNumber)
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                ...
+}
+\end{verbatim}
+
+\noindent\textbf{Pacotes de dados perdidos ou duplicados}
+\begin{verbatim}
+static int parserPacket(uint8_t* packet, size_t size) {
+        ...
+        if ( sequence != appLayer.sequenceNumber ) {
+            fprintf(stderr, "parserPacket: numero de sequência inválido\n");
+            errno = ECONNABORTED;
+            return -1; // Retorna -1 vai para o read que depois vai para o
+            // initAppLayer que depois faz llclose e continue  e conta
+            // como uma tentativa no ciclo de recuperação for
+        }
+        ...
+}
+\end{verbatim}
+
+\noindent\textbf{Recuperação em caso de erro}\\\textit{Ver Anexo 4}\\
+
+\noindent\textbf{Registo de ocorrências}
+\begin{verbatim}
+typedef struct {
+    unsigned int numFramesI;
+    unsigned int numFramesIResent;
+    unsigned int numTimeouts;
+    unsigned int numREJ;
+    struct timeval startTime;
+    struct timeval endTime;
+} Register;
+
+typedef struct {
+    ...
+    // Vai sendo preenchida durante a execução do programa
+    Register reg;
+} LinkLayer;
+\end{verbatim}
+
+\begin{verbatim}
+int llclose(void) {
+        ...
+        fprintf(stderr, "llclose finished without errors\n");
+        gettimeofday(&linkLayer.reg.endTime, 0);
+        printRegister(); // !!!!! Aqui !!!!!
+        return 0;
+        ...
+}
+\end{verbatim}
+
+\section{Conclusões}
+%síntese da informação apresentada nas secções anteriores; reflexão sobre os
+%objectivos de aprendizagem alcançados
+
+\newpage
+\section*{Anexos}
+\subsection*{Anexo 1}
+
 \begin{verbatim}
 static bool readCMD(uint8_t * C) {
 
@@ -771,14 +951,7 @@ etc, de modo a não sobrecarregar o relatório.
 %mostrar o código da máquina de estados, llwrite, llread. Ligação entre funções
 %do linklayer
 
-\section{Protocolo de aplicação}
-%identificação dos principais aspectos funcionais; descrição da estratégia de
-%implementação destes aspectos com apresentação de extractos de código
-A appLayer só necessita de ter uma função public visto que só tem de receber os
-settings do parser. A partir daí a appLayer agarra a execução até haver uma
-saturação do número de tentativas para a transferência do ficheiro(recuperação
-em caso de erros), ou caso acha sucesso na transmissão/recepção.
-
+\subsection*{Anexo 2}
 \begin{verbatim}
 int initAppLayer(Bundle *bundle) {
 
@@ -943,29 +1116,7 @@ static int write(void) {
 }
 \end{verbatim}
 
-\section{Validação}
-%descrição dos testes efectuados com apresentação quantificada dos resultados,
-%se possível
-A técnica de teste dos programas foi feita à medida em que o código ia sendo
-escrito. Na maior parte das vezes através de printfs. No entanto, também usámos
-o gdb para testar o parser e algumas outras partes do código. Ademais, muitas
-vezes tentámos isolar funções para tentar testá-las até à exaustão, por exemplo
-mandando umas quantas strings e depois fazendo diffs. De início configurámos duas
-máquinas virtuais para correr os testes, no entanto, isso provou ser bastante
-chato. Por essa razão, encontrámos um software chamado socat que cria portas
-série virtuais. sudo socat PTY,link=/dev/tty100,echo=0
-PTY,link=/dev/tty200,echo=0 \&. Foi só na semana da apresentação que testámos o
-nosso software no metal, felizmente funcionou tudo como ansiávamos.
-
-%falar sobre os printfs; tentativa de fazer debugging com break points;
-%vericacao da implementacao atraves de portas serie virtuais, socat; e nos pcs
-%da feup
-
-\section{Elementos de valorização}
-%identificação dos elementos de valorização implementados; descrição da
-%estratégia de implementação com apresentação de pequenos extratos de código
-A seleção de parâmetros pelo utilizador por feita muito para além das exigências
-pedidas.
+\subsection*{Anexo 3}
 \begin{verbatim}
 Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
 
@@ -1096,8 +1247,52 @@ Bundle** parse_args(int argc, char **argv, size_t *NBundles) {
 }
 \end{verbatim}
 
-\section{Conclusões}
-%síntese da informação apresentada nas secções anteriores; reflexão sobre os
-%objectivos de aprendizagem alcançados
+\subsection*{Anexo 4}
+
+\begin{verbatim}
+int initAppLayer(Bundle *bundle) {
+    ...
+    for (tries = 0; tries < bundle->llSettings.numAttempts; ++tries) {
+        llinitialize(&(bundle->llSettings), IS_RECEIVER(appLayer.settings->status));
+
+        if(tries > 0)
+            fprintf(stderr, "Recuperação de erro: %d\n", tries);
+
+        if ( llopen() != 0 ) {
+            fprintf(stderr, "Error: llopen()\n");
+            llclose();
+            continue;
+        }
+        else fprintf(stderr, "llopen() was successful\n\n");
+
+        appLayer.sequenceNumber = 0;
+
+        if ( IS_RECEIVER(appLayer.settings->status) ) {
+            res = read();
+            if ( res != 0 ) {
+                fprintf(stderr, "There was an error in applayer read function\n");
+                llclose();
+                continue;
+            }
+        } else {
+            res = write();
+            if ( res != 0 ) {
+                fprintf(stderr, "There was an error in applayer write function\n");
+                llclose();
+                continue;
+            }
+        }
+
+        if( llclose() != 0) {
+            fprintf(stderr, "Error: llclose(), going to exit\n");
+                return -1;
+        }
+        else fprintf(stderr, "llclose() was successful\n");
+
+        break;
+    }
+    ...
+}
+\end{verbatim}
 
 \end{document}
