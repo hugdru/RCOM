@@ -85,12 +85,11 @@ numAttempts, payloadSize e baudrate.
     \caption{Defines modo de operação e tipo IO no ficheiro
     applayersettings.h}
 \end{figure}\\
-O AppLayerSettings está declarado no
-ficheiro \textit{applayersettings.h} e contém os seguintes argumentos: status,
-packetBodySize, filename e um union Io que pode ser um apontador para um
-ficheiro, para uma string ou nulo. Para além disso, encontram-se lá defines que
-o parser usa para indicar como aceder ao Union Io e qual o modo de
-operação.\\\newline
+O AppLayerSettings está declarado no ficheiro \textit{applayersettings.h} e
+contém os seguintes argumentos: status, packetBodySize, filename e um union Io
+que pode ser um apontador para um ficheiro, para uma string ou nulo. Para além
+disso, encontram-se lá defines que o parser usa para indicar como aceder ao
+Union Io e qual o modo de operação.\\\newline
 
 As estruturas mais importantes do nosso programa são: Applayer e LinkLayer.
 Estão presentes, respetivamente, nos ficheiros: \textit{applayer.c} e
@@ -100,12 +99,12 @@ Estão presentes, respetivamente, nos ficheiros: \textit{applayer.c} e
     \includegraphics[width=0.45\textwidth]{applayerStruct.png}
     \caption{Estrutura AppLayer presente no ficheiro applayer.c}
 \end{figure} \\
-Na estrutura Applayer: usamos sequenceNumber para que
-possamos identificar se houve algum pacote de dados perdido, e se tal acontecer
-recuperar desse erro; fileSize é preenchido com o tamanho do ficheiro a
-transmitir ou vai sendo atualizado consoante recebemos informação, para
-depois compararmos com o pacote de controlo que vem no fim; e, settings que
-aponta para um estrutura AppLayerSettings que foi preenchida pelo parser.\\
+Na estrutura Applayer: usamos sequenceNumber para que possamos identificar se
+houve algum pacote de dados perdido, e se tal acontecer recuperar desse erro;
+fileSize é preenchido com o tamanho do ficheiro a transmitir ou vai sendo
+atualizado consoante recebemos informação, para depois compararmos com o pacote
+de controlo que vem no fim; e, settings que aponta para um estrutura
+AppLayerSettings que foi preenchida pelo parser.\\
 \begin{figure}[h]
 \centering
     \includegraphics[width=0.45\textwidth]{linklayerStruct.png}
@@ -118,9 +117,9 @@ porta série aberta; oldtio, informação da porta série a ser reposta no fim d
 conexão; settings, apontador para uma estrutura do tipo LinkLayerSettings onde
 se encontram as configurações passadas pela linha de comandos que só interessam
 a esta camada; frame, apontador para uma trama de informação unstuffed criada
-na função \textit{llinitialize} com o tamanho máximo esperado; frameLength, tamanho da
-trama de informação recebida; finalmente, temos uma estrutura chamada Register
-que guarda ocorrências.
+na função \textit{llinitialize} com o tamanho máximo esperado; frameLength,
+tamanho da trama de informação recebida; finalmente, temos uma estrutura
+chamada Register que guarda ocorrências.
 
 %\begin{wrapfigure}{R}{0.45\textwidth}
 %\centering
@@ -136,12 +135,11 @@ Esta é a função mais importante do nosso código, e tem o objetivo de reconhe
 qualquer comando válido, seja ele uma trama de dados ou de controlo. É
 retornado true se for encontrada uma sequência de bytes válida, isto é, uma
 trama bem formada em todos os sentidos; *C, sendo C o endereço de um variável
-criada por quem chamou a função. É preenchido com o tipo de comando
-quando estamos no estado apropriado,
-por exemplo: C\_DISC, C\_UA, C\_I\_N, C\_RR, etc.
-Progredi-se na máquina de estados quando há um byte bom. Ou retrocede-se
-quando há algum byte não esperado. O destuffing, tal como a verificação da integridade dos
-dados é feita nesta função. Há uma divergência na máquina de estados que é
+criada por quem chamou a função. É preenchido com o tipo de comando quando
+estamos no estado apropriado, por exemplo: C\_DISC, C\_UA, C\_I\_N, C\_RR, etc.
+Progredi-se na máquina de estados quando há um byte bom. Ou retrocede-se quando
+há algum byte não esperado. O destuffing, tal como a verificação da integridade
+dos dados é feita nesta função. Há uma divergência na máquina de estados que é
 consequência de haver dois tipos de tramas. Quando estamos nesse estado e
 recebemos um F, e sendo *C um comando da trama de controlo é retornado true,
 que simboliza que foi recebido uma sequência válido no tempo configurado para o
@@ -155,105 +153,136 @@ tomada foi alterar o BBC1(Header) ou o BBC2(Body) no caso da função de
 probabilidade \textit{random\_bool(double probabilidade)} tiver retornado true.
 As tramas de Informação com o cabeçalho bom mas com BBC errado no campo de
 dados são tratadas de forma especial. É também retornado true, no entanto o
-llread terá de verificar se o último byte da trama lida (linkLayer.frame) é
-F ou não. Porque o F só é adicionado se a trama não tiver erros. Cabe ao
-\textit{llopen}, \textit{llread}, \textit{llwrite} e ao \textit{llclose} decidir o que fazer, consoante
-o tipo de comandos que recebem, *C, sempre analisando o retorno.\linebreak
+llread terá de verificar se o último byte da trama lida (linkLayer.frame) é F
+ou não. Porque o F só é adicionado se a trama não tiver erros. Cabe ao
+\textit{llopen}, \textit{llread}, \textit{llwrite} e ao \textit{llclose}
+decidir o que fazer, consoante o tipo de comandos que recebem, *C, sempre
+analisando o retorno.\\
 
 \noindent\textbf{\textit{int llinitialize(LinkLayerSettings *ptr, bool
-is\_receiver);}}\\
-Esta função, tem de ser corrida antes de qualquer outra, e tem o objetivo de: preencher os dados iniciais da estrutura
-linkLayer; instalar o signal handler; e, alocar memória para
-linkLayer.frame. De início usámos a função signal (que
-está deprecada), mas acabámos por mudar para função sigaction porque após um sinal alarm
-o handler levava reset. Resultado num crash do programa. Todos os argumentos
-são usados para inicializar valores na estrutura linkLayer.\linebreak
+is\_receiver);}}\\ Esta função, tem de ser corrida antes de qualquer outra, e
+tem o objetivo de: preencher os dados iniciais da estrutura linkLayer; instalar
+o signal handler; e, alocar memória para linkLayer.frame. De início usámos a
+função signal (que está deprecada), mas acabámos por mudar para função
+sigaction porque após um sinal alarm o handler levava reset. Resultado num
+crash do programa. Todos os argumentos são usados para inicializar valores na
+estrutura linkLayer.\\
 
-\noindent\textbf{\textit{int llopen(void);}}\\
-Abre a porta série e configura-a com os settings necessários passados pela linha de
-comandos, presentes em linkLayer.settings->{opção}. E guarda as configurações
-antigas para posterior restauração. Na parte final do código temos um conjunto
-de ifs dentro do while de tentativas em que se trata do processo inicial de
-estabelecimento da conexão, que depende do modo de operação. Aproveita a função \textit{readCMD} para assim
-evitar criar outra máquina de estados só para este caso específico. Optámos por
-tratar do caso especial da trama de controlo UA poder ser
-perdida ou haver timeout do emissor no \textit{llread}, uma vez
-que poderíamos desperdiçar algum tempo nesta função à espera de alguma trama.
-\linebreak
+\noindent\textbf{\textit{int llopen(void);}}\\ Abre a porta série e configura-a
+com os settings necessários passados pela linha de comandos, presentes em
+linkLayer.settings->{opção}. E guarda as configurações antigas para posterior
+restauração. Na parte final do código temos um conjunto de ifs dentro do while
+de tentativas em que se trata do processo inicial de estabelecimento da
+conexão, que depende do modo de operação. Aproveita a função \textit{readCMD}
+para assim evitar criar outra máquina de estados só para este caso específico.
+Optámos por tratar do caso especial da trama de controlo UA poder ser perdida
+ou haver timeout do emissor no \textit{llread}, uma vez que poderíamos
+desperdiçar algum tempo nesta função à espera de alguma trama.\\
 
-\noindent\textbf{\textit{uint8\_t* llread(size\_t *payloadSize);}}\\
-Trata de retornar a payload com um determinado tamanho indicado por
-*payloadSize à applayer. A estrutura da função é semelhante à do
-\textit{llwrite}, no entanto é bem mais
-extensa. Um conjunto de ifs fechados por um while de tentativas. No entanto,
-temos um if bloqueante que separa a falha no estabelecimento da conexão das
-restantes situações. Que é devido à possibilidade do emissor enviar uma trama de controlo SET,
-novamente. Uma vez analisada essa parte, temos ifs para verificar se: número de
-sequência esperado mas houver corrupção da parte dos dados; número de
-sequência não esperado e corrupção da parte dos dados; trama de informação
-perfeita; trama duplicada; disconnect; trama válida mas não esperada(else). O
-tratamento dos casos ficou bastante facilitado uma vez que a função
-\textit{readCMD} é um máquina de estados completa, que retorna por
+\noindent\textbf{\textit{uint8\_t* llread(size\_t *payloadSize);}}\\ Trata de
+retornar a payload com um determinado tamanho indicado por *payloadSize à
+applayer. A estrutura da função é semelhante à do \textit{llwrite}, no entanto
+é bem mais extensa. Um conjunto de ifs fechados por um while de tentativas. No
+entanto, temos um if bloqueante que separa a falha no estabelecimento da
+conexão das restantes situações. Que é devido à possibilidade do emissor enviar
+uma trama de controlo SET, novamente. Uma vez analisada essa parte, temos ifs
+para verificar se: número de sequência esperado mas houver corrupção da parte
+dos dados; número de sequência não esperado e corrupção da parte dos dados;
+trama de informação perfeita; trama duplicada; disconnect; trama válida mas não
+esperada(else). O tratamento dos casos ficou bastante facilitado uma vez que a
+função \textit{readCMD} é um máquina de estados completa, que retorna por
 argumento(apontador) o tipo de trama quando existe uma sequência válida de
-bytes esperados(tramas independentemente do tipo, desde que sejam válidas). \linebreak
+bytes esperados(tramas independentemente do tipo, desde que sejam válidas). \\
 
 \noindent\textbf{\textit{int llwrite(uint8\_t *packet, size\_t packetSize);}}\\
 Envia uma trama de dados com um determinado tamanho e espera pelo retorno para
-saber se o receptor recebeu com sucesso a mensagem. Segue o mesmo
-princípio do \textit{llread}, um conjunto de ifs dentro de um while de
-tentativas. Cada um dos ifs analisa um determinado caso: recebeu um RR errado;
-RR certo; REJ certo; REJ errado; DISC; e, comando não esperado(else).\linebreak
+saber se o receptor recebeu com sucesso a mensagem. Segue o mesmo princípio do
+\textit{llread}, um conjunto de ifs dentro de um while de tentativas. Cada um
+dos ifs analisa um determinado caso: recebeu um RR errado; RR certo; REJ certo;
+REJ errado; DISC; e, comando não esperado(else).\\
 
-\noindent\textbf{\textit{int llclose(void);}}\\
-Nesta função tratamos de terminar a conexão. Lá podemos encontrar uma estrutura
-semelhante à parte final da função \textit{llopen}. O registo de ocorrências é
-impresso, variáveis alocadas dinamicamente são limpas, configurações da porta
-série antiga são restauradas, a porta é fechada, etc.\linebreak
+\noindent\textbf{\textit{int llclose(void);}}\\ Nesta função tratamos de
+terminar a conexão. Lá podemos encontrar uma estrutura semelhante à parte final
+da função \textit{llopen}. O registo de ocorrências é impresso, variáveis
+alocadas dinamicamente são limpas, configurações da porta série antiga são
+restauradas, a porta é fechada, etc.\\
 
 \noindent\textbf{static uint8\_t* buildFrameHeader(uint8\_t A, uint8\_t C,
-size\_t * headerSize, bool is\_IframeHead);}\\
-Esta função trata de retornar a cabeça de uma trama,
-is\_IframeHead, com uma dada configuração. O tamanho da trama é retornado por
-argumento. A trama devolvida por esta função está pronta para ser enviada no caso de
-ser uma trama de controlo, ou para juntar no caso da de informação. O
-stuffing e o cálculo do bcc são aqui feitos.\linebreak
+size\_t * headerSize, bool is\_IframeHead);}\\ Esta função trata de retornar a
+cabeça de uma trama, is\_IframeHead, com uma dada configuração. O tamanho da
+trama é retornado por argumento. A trama devolvida por esta função está pronta
+para ser enviada no caso de ser uma trama de controlo, ou para juntar no caso
+da de informação. O stuffing e o cálculo do bcc são aqui feitos.\\
 
-\noindent\textbf{\textit{static uint8\_t * stuff(uint8\_t * packet, size\_t size,
-size\_t * stuffedSize);}}\\
-Recebe um pacote com um dado tamanho, e devolve o packet stuffed com o BCC
-acoplado e o respetivo tamanho por argumento. Esta função só é chamada pelo
-\textit{buildIframe}.
-\linebreak
+\noindent\textbf{\textit{static uint8\_t * stuff(uint8\_t * packet, size\_t
+size, size\_t * stuffedSize);}}\\ Recebe um pacote com um dado tamanho, e
+devolve o packet stuffed com o BCC acoplado e o respetivo tamanho por
+argumento. Esta função só é chamada pelo \textit{buildIframe}. \\
 
-\noindent\textbf{\textit{static uint8\_t * buildIFrame(uint8\_t * packet, size\_t
-packetSize, size\_t * stuffedFrameSize);}}\\
-Constrói uma trama de informação. Recebe o packet e o tamanho. E devolve a
-trama de informação pronta a enviar e o tamanho por argumento. A trama é
-construída por partes: é feita a cabeça; depois é feito o BCC e o stuffing do
-pacote que é realizado pela função \textit{stuff}; e depois junta-se as
-duas partes e adiciona-se um F.\linebreak
+\noindent\textbf{\textit{static uint8\_t * buildIFrame(uint8\_t * packet,
+size\_t packetSize, size\_t * stuffedFrameSize);}}\\ Constrói uma trama de
+informação. Recebe o packet e o tamanho. E devolve a trama de informação pronta
+a enviar e o tamanho por argumento. A trama é construída por partes: é feita a
+cabeça; depois é feito o BCC e o stuffing do pacote que é realizado pela função
+\textit{stuff}; e depois junta-se as duas partes e adiciona-se um F.\\
 
-\noindent\textbf{\textit{static bool isCMD(uint8\_t ch);}}\\
-Verifica se o byte ch é um campo de controlo válido de uma trama de controlo. \linebreak
+\noindent\textbf{\textit{static bool isCMD(uint8\_t ch);}}\\ Verifica se o byte
+ch é um campo de controlo válido de uma trama de controlo. \\
 
-\noindent\textbf{\textit{static bool isCMDI(uint8\_t ch);}}\\
-Verifica se o byte ch é um campo de controlo válido de uma trama de informação. \linebreak
+\noindent\textbf{\textit{static bool isCMDI(uint8\_t ch);}}\\ Verifica se o
+byte ch é um campo de controlo válido de uma trama de informação. \\
 
 \noindent\textbf{\textit{static bool random\_bool(double probability);}}\\
 Função que devolve true com uma dada probabilidade.
 
-\subsubsection{applayer}
-\noindent\textbf{\textit{int initAppLayer(Bundle *bundle);}}\\
+\subsubsection{applayer} \noindent\textbf{\textit{int initAppLayer(Bundle
+*bundle);}}\\ Recebe um estrutura bundle que é usada para atualizar o apontador
+da estrutura appLayer.settings, para \&(bundle->alSettings). E para passar para
+a função \textit{llinitialize} \&(bundle->llSettings). A função começa por
+inicializar e verificar a validade de inputs, dos ficheiros e dos status. Por
+exemplo: preenche a variável appLayer.fileSize se estivermos em modo de
+operação emissor; verifica se os ficheiros foram abertos; vê o comprimento da
+string se o status indicar que é para transmitir uma string em vez de um
+ficheiro; etc. Logo depois dessa parte, temos o ciclo de recuperação em caso de
+erro. Lá dentro chamam-se as funções pela seguinte ordem:
+\textit{llinitialize}, \textit{llopen}, \textit{read} se for modo de recetor ou
+\textit{write} se for modo de emissor, e \textit{llclose}. Caso uma dessas
+partes falhe o processo é reiniciado até N tentativas. O processo é simples,
+basta olhar para o tipo de retorno de cada uma dessas funções e no caso de
+haver erro fecha-se a conexão com o \textit{llclose} e faz-se continue, para
+que se salte para o início do ciclo for.\\
 
-%\linebreak
-\noindent\textbf{\textit{static int read(void);}}\\
+\noindent\textbf{\textit{static int read(void);}}\\ O objetivo desta função
+privada do applayer é ir lendo pacotes até receber do emissor um sinal que
+indique fim de conexão. Existe um ciclo while infinito que só é quebrado quando
+existe um erro do \textit{llread} ou da função \textit{parserPacket}, ou quando
+o tipo de retorno do \textit{llread} indica que houve fim de conexão. Quando é
+recebido um pacote com sucesso o mesmo é passado para a função
+\textit{parserPacket} para processamento.\\
 
-%\linebreak
+\noindent\textbf{\textit{static int parserPacket(uint8\_t* packet, size\_t
+size);}}\\ Esta função processa cada tipo de pacote de forma diferente. Se for
+de dados então: verifica o número de sequência, e se for diferente dá reset à
+conexão; analisa se o primeiro pacote que deveria chegar é um do tipo start ou
+não, e se for retorna -1; caso tudo esteja em ordem, ignora os primeiros 4
+bytes e escreve para o ficheiro, e incrementa tanto appLayer.fileSize como
+appLayer.sequenceNumber(recomeça do zero se exceder). Se o tipo de pacote for start:
+se o tipo for size é ignorado, porque no nosso caso só o esperamos no fim;
+se for do tipo nome e se foi passada a opção para criar um ficheiro com o
+nome que vem no pacote, então é criado o ficheiro com esse nome; caso contrário
+dá erro. A estrutura do código do tipo de pacote end é parecida à do start: se
+for do tipo size, o valor é comparado com o tamanho do ficheiro guardado na
+estrutura e se for diferente retorna erro; caso contrário dá erro.\\
+
+%\\
 \noindent\textbf{\textit{static int write(void);}}\\
 
-\subsubsection{parser}
+%\\
+\noindent\textbf{\textit{static int writeStartPacket(void);}}\\
 
-\noindent\textbf{\textit{Bundle** parse\_args(int argc, char **argv, size\_t *NBundles)}}\\
+%\\
+\noindent\textbf{\textit{static int writeDataPacket(uint8\_t *data, size\_t
+size);}}\\
 
 \section{Casos de uso}
 %identificação; sequências de chamada de funções
