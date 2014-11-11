@@ -118,7 +118,7 @@ porta série aberta; oldtio, informação da porta série a ser reposta no fim d
 conexão; *settings, apontador para uma estrutura do tipo LinkLayerSettings onde
 se encontram as configurações passadas pela linha de comandos que só interessam
 a esta camada; *frame, apontador para uma trama de informação unstuffed criada
-na função llinitialize() com o tamanho máximo esperado; frameLength, tamanho da
+na função \textit{llinitialize} com o tamanho máximo esperado; frameLength, tamanho da
 trama de informação recebida; finalmente, temos uma estrutura chamada Register
 que guarda ocorrências.
 
@@ -135,12 +135,13 @@ que guarda ocorrências.
 Esta é a função mais importante do nosso código, e tem o objetivo de reconhecer
 qualquer comando válido, seja ele uma trama de dados ou de controlo. É
 retornado true se for encontrada uma sequência de bytes válida, isto é, uma
-trama bem formada em todos os sentidos; *C é preenchido com o tipo de comando
+trama bem formada em todos os sentidos; *C, sendo C o endereço de um variável
+criada por quem chamou a função, é preenchido com o tipo de comando
 quando estamos no estado apropriado,
 por exemplo: C\_DISC, C\_UA, C\_I\_N, C\_RR, etc.
 Progredi-se na máquina de estados quando há um byte bom. Ou retrocede-se
-quando há algum byte não esperado. O destuffing, tal como a integridade dos
-dados é verificada nesta função. Há uma divergência na máquina de estados que é
+quando há algum byte não esperado. O destuffing, tal como a verificação da integridade dos
+dados é feita nesta função. Há uma divergência na máquina de estados que é
 consequência de haver dois tipos de tramas. Quando estamos nesse estado e
 recebemos um F, e sendo *C um comando da trama de controlo é retornado true,
 que simboliza que foi recebido uma sequência válido no tempo configurado para o
@@ -154,20 +155,49 @@ tomada foi alterar o BBC1(Header) ou o BBC2(Body) no caso da função de
 probabilidade \textit{random\_bool(double probabilidade)} tiver retornado true.
 As tramas de Informação com o cabeçalho bom mas com BBC errado no campo de
 dados são tratadas de forma especial. É também retornado true, no entanto o
-llread terá de verificar se o último caracter da trama lida (linkLayer.frame) é
-F ou não. Porque o F só é adicionado no caso de a trama não tiver erros
+llread terá de verificar se o último byte da trama lida (linkLayer.frame) é
+F ou não. Porque o F só é adicionado no caso de a trama não ter erros
 derivados de ruído. Cabe ao llread e ao llwrite decidir o que fazer, consoante
-o tipo de comandos que recebem.\linebreak
+o tipo de comandos que recebem, *C, e analisando o retorno.\linebreak
 
 \noindent\textbf{\textit{int llinitialize(LinkLayerSettings *ptr, bool
 is\_receiver);}}\\
+Esta função, tem de ser corrida antes de qualquer outra, e tem o objetivo de: preencher os dados iniciais da estrutura
+linkLayer; instalar o signal handler; e, alocar memória para
+linkLayer.frame. De início usámos a função signal(que
+está deprecada) para o
+fazer, mas acabámos por mudar para função sigaction porque após um sinal alarm
+o handler levava reset. Resultado num crash do programa. Todos os argumentos
+são usados para inicializar valores na estrutura linkLayer.\linebreak
 
 \noindent\textbf{\textit{int llopen(void);}}\\
+Abre a porta série e configura-a com os settings necessários passados pela linha de
+comandos, presentes em linkLayer.settings->{opção}. E guarda as configurações
+antigas para posterior restauração. Na parte final do código temos um conjunto
+de ifs dentro do while de tentativas em que se trata de processo inicial de
+estabelecimento da conexão. Que aproveita a função \textit{readCMD} para assim
+evitar criar outra máquina de estados só para este caso específico. Optámos por
+tratar do facto especial da trama de controlo UA poder ser
+perdida ou haver timeout do emissor devido a atrasos no \textit{llread}, uma vez
+que poderíamos desperdiçar algum tempo nesta função à espera de alguma trama.
+\linebreak
 
-%\linebreak
 \noindent\textbf{\textit{uint8\_t* llread(size\_t *payloadSize);}}\\
+Trata de retornar a payload com um determinado tamanho indicado por
+*payloadSize à applayer. A estrutura da função é semelhante à do
+\textit{llwrite} e da parte final do \textit{llopen}, no entanto é bem mais
+extensa. Um conjunto de ifs fechados por um while de tentativas. No entanto,
+temos um if bloqueante que separa a falha no estabelecimento da conexão das
+restantes situações. Que é devido à possibilidade do emissor enviar uma trama de controlo SET,
+novamente. Uma vez analisada essa parte, temos ifs para verificar se: número de
+sequência esperado mas houver corrupção da parte dos dados; número de
+sequência não esperado e corrupção da parte dos dados; trama de informação
+perfeita; trama duplicada; disconnect; trama válida mas não esperada(else). O
+tratamento dos casos ficou bastante facilitado uma vez que a função
+\textit{readCMD} é um máquina de estados completa, que retorna por
+argumento(apontador) o tipo de trama quando existe uma sequência válida de
+bytes esperados(tramas independentemente do tipo, desde que sejam válidas). \linebreak
 
-%\linebreak
 \noindent\textbf{\textit{int llwrite(uint8\_t *packet, size\_t packetSize);}}\\
 
 %\linebreak
