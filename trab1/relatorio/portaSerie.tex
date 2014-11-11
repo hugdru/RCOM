@@ -274,15 +274,35 @@ dá erro. A estrutura do código do tipo de pacote end é parecida à do start: 
 for do tipo size, o valor é comparado com o tamanho do ficheiro guardado na
 estrutura e se for diferente retorna erro; caso contrário dá erro.\\
 
-%\\
-\noindent\textbf{\textit{static int write(void);}}\\
+\noindent\textbf{\textit{static int write(void);}}\\ Trata de ir buscar
+informação aos ficheiros/string para depois a reencaminhar para funções
+auxiliares que depois tratam de usar o \textit{llwrite}. A primeira parte do
+código verifica se o que vamos mandar é uma string ou um ficheiro e toma as
+devidas precauções. Se for string computa o tamanho mais o zero, se for
+ficheiro é enviado o pacote start \textit{writeStartPacket} com o seu nome.
+Após esta fase entramos num ciclo que só termina quando o ficheiro ou string
+tenham sido enviados por completo, ou em caso de erro. Ambos os casos foram
+tratados e funcionam no entanto irei falar só sobre o do ficheiro. É lido do
+ficheiro para uma variável um conjunto de bytes com tamanho máximo especificado
+pelo utilizador/default e chamada a função \textit{writeDataPacket}. Se
+tivermos chegado a feof então o while é quebrado e é enviado o pacote de
+controlo end, \textit{writeEndPacket}. Onde vai o tamanho do ficheiro.\\
 
-%\\
 \noindent\textbf{\textit{static int writeStartPacket(void);}}\\
+Função simples que trata de formar e enviar um pacote de controlo start do tipo
+nome do ficheiro. Que pode ser usado no receptor para criar um ficheiro com o
+mesmo nome.\\
 
-%\\
 \noindent\textbf{\textit{static int writeDataPacket(uint8\_t *data, size\_t
-size);}}\\
+size);}}
+Cria uma variável temporária com o cabeçalho de um pacote de dados e adiciona
+os bytes data. Se o \textit{llwrite} for bem sucedido então o número de
+sequência do appLayer é incrementado.\\
+
+\noindent\textbf{\textit{static int writeEndPacket(void);}}
+Função simples que trata de formar e enviar um pacote de controlo end do tipo
+tamanho do ficheiro. Que é sempre usado no receptor para verificar se recebeu o
+ficheiro completo.
 
 \section{Casos de uso}
 %identificação; sequências de chamada de funções
@@ -315,7 +335,7 @@ informação acabada de ser processada; e, método alternativo de guardar
 ficheiros ou de os receber.\\Entre a opção e o argumento tanto faz haver ou nao
 haver espaços, -b115200 = -b 115200.
 \\\newline\textbf{Diagrama de casos de uso:}\\\newline
-\centerline{\includegraphics[scale=0.6]{useCases.png}}
+\centerline{\includegraphics[scale=0.42]{useCases.png}}
 
 \section{Protocolo de ligação lógica}
 %identificação dos principais aspectos funcionais; descrição da estratégia de
