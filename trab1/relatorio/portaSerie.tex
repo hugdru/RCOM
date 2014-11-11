@@ -7,6 +7,20 @@
 \usepackage[T1]{fontenc}
 \usepackage{wrapfig}
 \usepackage[tmargin=1.2in,bmargin=1in]{geometry}
+\usepackage{listingsutf8}
+\usepackage[utf8]{inputenc}
+\usepackage{color}
+\usepackage{ucs}
+\lstset{literate=%
+{æ}{{\ae}}1
+{å}{{\aa}}1
+{ø}{{\o}}1
+{Æ}{{\AE}}1
+{Å}{{\AA}}1
+{Ø}{{\O}}1
+}
+\lstset{extendedchars=\true}
+\lstset{inputencoding=ansinew}
 
 \begin{document}
 
@@ -294,7 +308,7 @@ nome do ficheiro. Que pode ser usado no receptor para criar um ficheiro com o
 mesmo nome.\\
 
 \noindent\textbf{\textit{static int writeDataPacket(uint8\_t *data, size\_t
-size);}}
+size);}}\\
 Cria uma variável temporária com o cabeçalho de um pacote de dados e adiciona
 os bytes data. Se o \textit{llwrite} for bem sucedido então o número de
 sequência do appLayer é incrementado.\\
@@ -326,7 +340,7 @@ emissoras e enviam o ficheiro pinguim.gif para possivelmente computadores
 diferentes. Um dos computadores receptores teria um processo serius iniciado
 com os seguintes argumentos:\\\newline serius -d '/dev/tty300' -b 115200 -D\\
 Cria um ficheiro com o nome que vem no pacote de controlo start, e coloca lá a
-informação que recebe. \\\newline E o outro:\\\newline serius -d '/dev/tty400'
+informação que recebe. E o outro:\\\newline serius -d '/dev/tty400'
 -R 'received.gif' \\\newline De início, tínhamos em mente correr cada Bundle
 numa thread. Possibilitando transferir/receber de várias fontes simultâneamente
 via porta série, no entanto, não houve tempo para o fazer. O mesmo sucedeu com
@@ -335,11 +349,420 @@ informação acabada de ser processada; e, método alternativo de guardar
 ficheiros ou de os receber.\\Entre a opção e o argumento tanto faz haver ou nao
 haver espaços, -b115200 = -b 115200.
 \\\newline\textbf{Diagrama de casos de uso:}\\\newline
-\centerline{\includegraphics[scale=0.42]{useCases.png}}
+\centerline{\includegraphics[scale=0.45]{useCases.png}}
 
 \section{Protocolo de ligação lógica}
 %identificação dos principais aspectos funcionais; descrição da estratégia de
 %implementação destes aspectos com apresentação de extratos de código
+Optámos por construir uma função, \textit{readCMD}, que implementa uma máquina de estados onde são
+identificadas tramas válidas e em que o tipo controlo(C) é retornado por
+argumento, que só deve ser usado guando o retorno desta função é verdadeiro
+(indica que recebeu alguma trama bem formada). Assim, evitámos estar a
+construir diversas máquinas de estados parecidas para as funções do linklayer.
+O que iria dificultar a compreensão do código, a sua manutenibilidade e a
+possível expansão do protocolo.\\\newline
+Também foi tido em atenção o performance da aplicação, por exemplo: na função
+\textit{readCMD} vamos fazendo o destuffing e calculando o BCC à medida que recebemos
+nova informação, isto permite reduzir o número de ciclos. Usamos esta técnica
+em todos os casos.
+
+\begin{verbatim}
+static bool readCMD(uint8_t * C) {
+
+    ...
+
+    while (!alarmed) {
+        res = read(linkLayer.serialFileDescriptor, &ch, 1);
+
+        if(res == 0)
+            state = START;
+        else if ( res == 1 ) {
+            fprintf(stderr, "State: %d      Res: %lu      C: %X\n", state, res, ch);
+            switch (state) {
+            case START:
+                if (ch == F)
+                    state = F_RCV;
+                break;
+            case F_RCV:
+                if (ch == A_CSENDER_RRECEIVER) {
+                    state = A_RCV;
+                    BCC1 = ch;
+                } else if (ch != F)
+                    state = START;
+                break;
+            case A_RCV:
+                if (ch == F)
+                    state = F_RCV;
+                else {
+                    if (isCMD(ch) || isCMDI(ch)) {
+                        BCC1 ^= ch;
+                        *C = ch;
+                        state = C_RCV;
+                    } else
+                        state = START;
+                }
+                break;
+            case C_RCV:
+                 //headerErrorTest = random_bool(0.15); // Gerador de erros 15% probabilidade
+                 if( headerErrorTest ) {   //Random error generator
+                        fprintf(stderr, "Erro aleatório, header tem erros\n");
+                        BCC1 ^= 0x05;
+                        headerErrorTest = false;
+                 }
+
+                if (stuffing) { //Destuffing in run-time
+                    stuffing = false;
+                    if ((ch ^ STUFFING_XOR_BYTE) == BCC1) {
+                        state = BCC_OK;
+                    }
+                    else
+                         state = START;
+
+                } else if (ch == ESC) {
+                    stuffing = true;
+                } else if (ch == BCC1) {
+                    state = BCC_OK;
+                } else if (ch == F)
+                    state = F_RCV;
+                else
+                    state = START;
+                break;
+            case BCC_OK:
+                if (ch == F && isCMD(*C)) {
+                    fprintf(stderr, "Received CMD: ");
+                    print_cmd(*C);
+                    fprintf(stderr, "\n");
+                    return true;
+                } else if (isCMDI(*C) && (ch != F) && linkLayer.is_receiver) {
+                    linkLayer.frame[linkLayer.frameLength++] = F;
+                    linkLayer.frame[linkLayer.frameLength++] = A_CSENDER_RRECEIVER;
+                    linkLayer.frame[linkLayer.frameLength++] = *C;
+                    linkLayer.frame[linkLayer.frameLength++] = BCC1;
+                    if ( ch == ESC ) {
+                        stuffing = true;
+                        BCC2 = 0x00;
+                    } else {
+                        linkLayer.frame[linkLayer.frameLength++] = ch;
+                        BCC2 = ch;
+                    }
+                    state = RCV_I;
+                    fprintf(stderr, "Receiving Frame I\n");
+                } else
+                    state = START;
+                break;
+            case RCV_I:
+                if (linkLayer.frameLength >= (linkLayer.settings->payloadSize + 6)) {
+                    fprintf(stderr, "This payload is invalid cause\
+                    it exceeds the max number of bytes\n");
+                    linkLayer.frameLength = 0;
+                    if (ch == F)
+                        state = F_RCV;
+                    else
+                        state = START;
+                } else if ( (ch == F) && stuffing ) {
+                    state = F_RCV;
+                    linkLayer.frameLength = 0;
+                    stuffing = false;
+                } else if (ch == F) {
+                    //Gerador de erros em software no campo de dados
+                    //bodyErrorTest = random_bool(0.30);
+                    if( bodyErrorTest ) {
+                        fprintf(stderr, "Erro aleatório, body tem erros\n");
+                        BCC2 ^= 0x05;
+                        bodyErrorTest = false;
+                    }
+                    // Reverter, pois o ultimo é o BCC
+                    BCC2 ^= linkLayer.frame[linkLayer.frameLength - 1];
+                    if (BCC2 == linkLayer.frame[linkLayer.frameLength - 1]) {
+                        linkLayer.frame[linkLayer.frameLength++] = ch;
+                        fprintf(stderr, "Received Frame I, Length: %lu\n",\
+                        linkLayer.frameLength);
+                    }
+                    return true;
+                    // Uma vez que tem o cabeçalho da header válido, Rej e RR,
+                    // fora ele verifica se o último elemento é F ou não
+                } else if (stuffing) {  //Destuffing in run-time
+                    stuffing = false;
+                    temp = ch ^ STUFFING_XOR_BYTE;
+                    linkLayer.frame[linkLayer.frameLength++] = temp;
+                    BCC2 ^= temp;
+                } else if (ch == ESC) {
+                    stuffing = true;
+                } else {
+                    BCC2 ^= ch;
+                    linkLayer.frame[linkLayer.frameLength++] = ch;
+                }
+                break;
+            default:
+                return false;
+                break;
+            }
+        }
+    }
+    return false;
+}
+\end{verbatim}
+
+Como podemos constatar a máquina de estados fica um pouco complexa, nesta
+função. Ao invés das outras funções do linkLayer.\\
+
+\begin{verbatim}
+int llwrite(uint8_t *packet, size_t packetSize) {
+
+    ...
+
+    while (tries < linkLayer.settings->numAttempts) {
+        alarmed = false;
+        received = false;
+
+        fprintf(stderr, "Sending frame, Tries: %d\n", tries);
+        res = write(linkLayer.serialFileDescriptor, stuffedFrame,
+                stuffedFrameSize);
+        if (res < 1) {
+                    tries++;
+                    continue;
+        }
+        alarm(linkLayer.settings->timeout);
+
+        received = readCMD(&C);
+
+        fprintf(stderr, "Receive: %d\n", received);
+        if (received) {
+            tries = 0;
+            if ( C == (C_RR_RAW | (linkLayer.sequenceNumber << 7)) ) { // RR Errado
+            } else if ( C == (C_RR_RAW | (changeSequenceNumber() << 7)) ) { // RR Certo
+                linkLayer.sequenceNumber = changeSequenceNumber();
+                free(stuffedFrame);
+                linkLayer.reg.numFramesI++;
+                return 0;
+            } else if ( C == (C_REJ_RAW | (linkLayer.sequenceNumber << 7)) ) { //REJ Certo
+                linkLayer.reg.numREJ++;
+            } else if ( C == (C_REJ_RAW | (linkLayer.sequenceNumber << 7)) ) {//REJ Errado
+            } else if ( C == C_DISC) {
+                fprintf(stderr, "llwrite(): Receiver failed, trying again\n");
+                break;
+            } else {
+                fprintf(stderr, "Received an unexpected command\n");
+            }
+        }
+        tries++;
+        linkLayer.reg.numFramesIResent++;
+    }
+
+    free(stuffedFrame);
+    return -1;
+}
+\end{verbatim}
+
+\begin{verbatim}
+uint8_t* llread(size_t *payloadSize) {
+
+    ...
+
+    while (tries < linkLayer.settings->numAttempts) {
+        fprintf(stderr, "Receiving frame\n");
+        alarmed = false;
+        alarm(linkLayer.settings->timeout);
+        received = readCMD(&C);
+        errno = 0;
+
+        if (tries == 0) previousC = C;
+
+        if (received) {
+            if (!blockedSet) {
+                if ( C == C_SET ) // Transmitter não recebeu bem o UA
+                    res = write(linkLayer.serialFileDescriptor, uaCmd, uaCmdSize);
+                else if ( !isCMDI(C) )// Se não for uma trama de informação
+                    // O ruído pode 'construir' uma trama sem erros não esperada!
+                    fprintf(stderr, "Garbage command received");
+                else blockedSet = true;
+            }
+            if (blockedSet) {
+                if ( (C == (C_I_RAW | (linkLayer.sequenceNumber << 6))) && \
+                (linkLayer.frame[linkLayer.frameLength-1] != F) ) { //REJ
+                    fprintf(stderr, "Cabeça da trama I boa, resto mau, mesma sequência -> rej\n");
+                    linkLayer.reg.numREJ++;
+                    if (linkLayer.sequenceNumber)
+                        res = write(linkLayer.serialFileDescriptor, rej1Cmd, rej1CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rej0Cmd, rej0CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                    linkLayer.reg.numFramesIResent++;
+                } else if ( (C == (C_I_RAW | (changeSequenceNumber() << 6))) &&
+                \(linkLayer.frame[linkLayer.frameLength-1] != F) ) { //RR
+                    fprintf(stderr, "Cabeça da trama I boa, resto mau, \
+                    sequência diferente -> rr\n");
+                    if (linkLayer.sequenceNumber)
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                // Trama I esperada
+                } else if ( C == (C_I_RAW | (linkLayer.sequenceNumber << 6)) ) {
+                    fprintf(stderr, "Trama I esperada\n");
+                    tempSize = linkLayer.frameLength - 6;
+                    payloadToReturn = (uint8_t *) malloc( sizeof(uint8_t) * tempSize );
+                    if ( payloadToReturn == NULL ) {
+                        fprintf(stderr, "errno Enomem\n");
+                        errno = ENOMEM;
+                        goto cleanUp;
+                    }
+                    for (i = 0; i < tempSize; ++i) {
+                        payloadToReturn[i] = linkLayer.frame[i+4];
+                    }
+                    *payloadSize = tempSize;
+                    linkLayer.sequenceNumber = changeSequenceNumber();
+                    if ( linkLayer.sequenceNumber == 0 )
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                    linkLayer.reg.numFramesI++;
+                    return payloadToReturn;
+                    // Trama I duplicada, emissor nao recebeu a confirmação
+                    //a tempo ou a confirmação foi perdida na rede
+                } else if ( C == (C_I_RAW | (changeSequenceNumber() << 6)) ) {
+                    if ( linkLayer.sequenceNumber == 0 )
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                    fprintf(stderr, "Trama duplicada");
+                } else if ( C == C_DISC ) { // Transmitter já enviou tudo
+                    fprintf(stderr, "LLread received valid disconnect\n");
+                    goto cleanUp;
+                } else { // Recebeu uma trama de supervisão ou não numerada
+                        // válida mas não esperada, ruído tramado!
+                    if ( linkLayer.sequenceNumber == 0 )
+                        res = write(linkLayer.serialFileDescriptor, rr0Cmd, rr0CmdSize);
+                    else
+                        res = write(linkLayer.serialFileDescriptor, rr1Cmd, rr1CmdSize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                    fprintf(stderr, "Não esperava esta trama");
+                }
+            }
+        }
+        if (previousC == C || !received) ++tries;
+        else tries = 0;
+        previousC = C;
+    }
+
+    fprintf(stderr, "errno Econnaborted\n");
+    errno = ECONNABORTED;
+
+    cleanUp:
+    ...
+    return NULL;
+}
+\end{verbatim}
+
+\begin{verbatim}
+int llopen(void) {
+
+    ...
+
+    while (tries < linkLayer.settings->numAttempts) {
+        alarmed = false;
+        if (linkLayer.is_receiver) {
+            alarm(linkLayer.settings->timeout);
+            received = readCMD(&C);
+            if (received && C == C_SET) {
+                res = write(linkLayer.serialFileDescriptor, cmd, cmdSize);
+                if (res < 1) {
+                    tries++;
+                    continue;
+                }
+                free(cmd);
+                return 0;
+            }
+        } else {
+            res = write(linkLayer.serialFileDescriptor, cmd, cmdSize);
+            if (res < 1) {
+                    tries++;
+                    continue;
+            }
+            alarm(linkLayer.settings->timeout);
+            received = readCMD(&C);
+            if (received && C == C_UA) {
+                free(cmd);
+                return 0;
+            }
+        }
+
+        tries++;
+    }
+
+    ...
+
+    return -1;
+}
+\end{verbatim}
+
+\begin{verbatim}
+int llclose(void) {
+
+    ...
+
+    if ( !success ) {
+        while (tries < linkLayer.settings->numAttempts) {
+            alarmed = false;
+            if (linkLayer.is_receiver) {
+                res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
+                if (res < 1) {
+                    tries++;
+                    continue;
+                }
+                alarm(linkLayer.settings->timeout);
+                received = readCMD(&C);
+                if (received && C == C_UA) {
+                    fprintf(stderr, "Receiver in llclose received C_UA\n");
+                    success = true;
+                    goto cleanSerial;
+                }
+            } else {
+                res = write(linkLayer.serialFileDescriptor, DISC, DISCsize);
+                if (res < 1) {
+                        tries++;
+                        continue;
+                }
+                alarm(linkLayer.settings->timeout);
+                received = readCMD(&C);
+                if (received && C == C_DISC) {
+                    res = write(linkLayer.serialFileDescriptor, UA, UAsize);
+                    if (res < 1) {
+                        tries++;
+                        continue;
+                    }
+                    success = true;
+                    goto cleanSerial;
+                }
+            }
+            tries++;
+        }
+    }
+
+    cleanSerial:
+
+    ...
+
+}
+\end{verbatim}
+
 Falar sobre a máquina de estados; poupança de ciclos for, destuffing e bbc; mostrar o código da máquina de
 estados, llwrite, llread. Ligação entre funções do linklayer
 
