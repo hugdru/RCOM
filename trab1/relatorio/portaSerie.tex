@@ -216,14 +216,31 @@ size\_t * headerSize, bool is\_IframeHead);}\\
 Esta função trata de retornar a cabeça de uma trama,
 is\_IframeHead, com uma dada configuração. O tamanho da trama é retornado por
 argumento. A trama devolvida por esta função está pronta para ser enviada no caso de
-ser uma trama de controlo, e para juntar no caso da de informação. Porque o
-stuffing e o cálculo do bcc são aqui feitos.
+ser uma trama de controlo, ou para juntar no caso da de informação. Porque o
+stuffing e o cálculo do bcc são aqui feitos.\linebreak
 
-\noindent\textbf{\textit{int llclose(void);}}\\
-\noindent\textbf{\textit{int llclose(void);}}\\
-\noindent\textbf{\textit{int llclose(void);}}\\
-\noindent\textbf{\textit{int llclose(void);}}\\
-\noindent\textbf{\textit{int llclose(void);}}\\
+\noindent\textbf{\textit{static uint8\_t * stuff(uint8\_t * packet, size\_t size,
+size\_t * stuffedSize);}}\\
+Recebe um pacote com um dado tamanho, e devolve o packet stuffed com o BCC
+acoplado e o respetivo tamanho por argumento. Esta função só é chamada pelo
+\textit{buildIframe}.
+\linebreak
+
+\noindent\textbf{\textit{static uint8\_t * buildIFrame(uint8\_t * packet, size\_t
+packetSize, size\_t * stuffedFrameSize);}}\\
+Constrói uma trama de informação. Recebe o packet e o tamanho. E devolve a
+trama de informação pronta a enviar e o tamanho por argumento. A trama é
+construída por partes: é feita a cabeça; depois é feito o stuffing do pacote e
+o respetivo BCC que é realizado pela função \textit{stuff}; e depois junta-se as
+duas partes e adiciona-se um F.\linebreak
+
+\noindent\textbf{\textit{static bool isCMD(uint8\_t ch);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{static bool isCMDI(uint8\_t ch);}}\\
+
+%\linebreak
+\noindent\textbf{\textit{static bool random\_bool(double probability);}}\\
 
 \subsubsection{applayer}
 \noindent\textbf{\textit{int initAppLayer(Bundle *bundle);}}\\
