@@ -174,8 +174,8 @@ são usados para inicializar valores na estrutura linkLayer.\linebreak
 Abre a porta série e configura-a com os settings necessários passados pela linha de
 comandos, presentes em linkLayer.settings->{opção}. E guarda as configurações
 antigas para posterior restauração. Na parte final do código temos um conjunto
-de ifs dentro do while de tentativas em que se trata de processo inicial de
-estabelecimento da conexão. Que aproveita a função \textit{readCMD} para assim
+de ifs dentro do while de tentativas em que se trata do processo inicial de
+estabelecimento da conexão, que depende do modo de operação. Que aproveita a função \textit{readCMD} para assim
 evitar criar outra máquina de estados só para este caso específico. Optámos por
 tratar do facto especial da trama de controlo UA poder ser
 perdida ou haver timeout do emissor devido a atrasos no \textit{llread}, uma vez
@@ -199,8 +199,30 @@ argumento(apontador) o tipo de trama quando existe uma sequência válida de
 bytes esperados(tramas independentemente do tipo, desde que sejam válidas). \linebreak
 
 \noindent\textbf{\textit{int llwrite(uint8\_t *packet, size\_t packetSize);}}\\
+Envia uma trama de dados com um determinado tamanho e espera pelo retorno para
+saber se o receptor recebeu com sucesso a mensagem. Segue o mesmo
+princípio do \textit{llread}, um conjunto de ifs dentro de um while de
+tentativas. Cada um dos ifs analisa um determinado caso: recebeu um rr errado;
+RR certo; REJ certo; REJ errado; DISC; e, comando não esperado.\linebreak
 
-%\linebreak
+\noindent\textbf{\textit{int llclose(void);}}\\
+Nesta função tratamos de terminar a conexão. Lá podemos encontrar uma estrutura
+semelhante à parte final da função \textit{llopen}. O registo de ocorrências é
+impresso, variáveis alocadas dinamicamente são limpas, configurações da porta
+série antiga são restauradas, a porta é fechada, etc.\linebreak
+
+\noindent\textbf{static uint8\_t* buildFrameHeader(uint8\_t A, uint8\_t C,
+size\_t * headerSize, bool is\_IframeHead);}\\
+Esta função trata de retornar a cabeça de uma trama,
+is\_IframeHead, com uma dada configuração. O tamanho da trama é retornado por
+argumento. A trama devolvida por esta função está pronta para ser enviada no caso de
+ser uma trama de controlo, e para juntar no caso da de informação. Porque o
+stuffing e o cálculo do bcc são aqui feitos.
+
+\noindent\textbf{\textit{int llclose(void);}}\\
+\noindent\textbf{\textit{int llclose(void);}}\\
+\noindent\textbf{\textit{int llclose(void);}}\\
+\noindent\textbf{\textit{int llclose(void);}}\\
 \noindent\textbf{\textit{int llclose(void);}}\\
 
 \subsubsection{applayer}
