@@ -1,47 +1,50 @@
 #ifndef URL_H
 #define URL_H
 
-typedef struct {
-  char * user;
-  char * password;
-  char * host;
-  char * path;
-  unsigned int userSize, passwordSize, hostSize, pathSize;
-} URL;
-
+#include <stddef.h> /* size_t */
 
 /**
-* @desc Faz parser do FTP URL path e preenche a estrutura url
-* @arg const char * path : FTP URL recebido na linha de comandos "ftp://[<user>:<password>@]<host>/<url-path>"
-* @arg URL * url : estrutura url que vai ser preenchida
-* @return Retorna 0 em caso de sucesso, 1 em caso de erro
+* Struct that contains the fields parsed in a FTP URL and needed for a FTP connection
+*/
+typedef struct {
+  char * user;      /* user name*/
+  char * password;  /* password of the user */
+  char * host;      /* FTP host name*/
+  char * path;      /* Path to the file to download */
+  size_t userSize, passwordSize, hostSize, pathSize; /* Size of corresponding string */
+} URL;
+
+/**
+* Parsers the FTP URL and fills the URL Struct with the respective values
+* @arg path FTP URL received "ftp://[<user>:<password>@]<host>/<url-path>"
+* @arg url URL Struct that will be filled
+* @return Returns 0 in case of success, 1 in case of error
 */
 int url_parser(const char * path, URL * url);
 
 /**
-* @desc Pede ao utilizador para introduzir a password (Desativado echo da linha de comandos)
-* @arg char ** password : Apontador para a password introduzida
-* @arg unsigned int * size : comprimendo da password
-* @return Retorna 0 em caso de sucesso, 1 em caso de erro
+* Asks to the user to type the password (stdin echo desactivated)
+* @arg password Pointer to the typed password
+* @arg size size of the password
+* @return Returns 0 in case of success, 1 in case of error
 */
-int url_getPassword(char ** password, unsigned int * size);
+int url_getPassword(char ** password, size_t * size);
 
 /**
-* @desc Pede ao utilizador para introduzir um campo especificado por message
-* @arg const char * message : Mensagem a ser mostrada ao utilizador
-* @arg char ** input : Apontador para a string
-* @arg unsigned int * size : comprimendo do input
-* @return Retorna 0 em caso de sucesso, 1 em caso de erro
+* Asks to the user to type the specified field defined by message
+* @arg message Message to be displayed to the user
+* @arg input Pointer to the user input
+* @arg size Size of the user input
+* @return Returns 0 in case of success, 1 in case of error
 */
+int url_getInput(const char * message, char ** input, size_t * size);
 
-int url_getInput(const char * message, char ** input, unsigned int * size);
 /**
-* @desc Obtem o ip do host
-* @arg const char * host : host introduzido pelo utilizador
-* @arg char * ip : ip do host
-* @return Retorna 0 em caso de sucesso, 1 em caso de erro
+* Gets the IP of the host
+* @arg host Name of host which IP the function gets
+* @arg ip Host's IP
+* @return Returns 0 in case of success, 1 in case of error
 */
 int url_getIP(const char * host, char * ip);
-
 
 #endif

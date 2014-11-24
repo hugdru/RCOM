@@ -1,28 +1,23 @@
-#define _POSIX_SOURCE
+#define _POSIX_SOURCE     /* fileno */
 #include "url.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <termios.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <errno.h>
+#include <stdio.h>        /* printf */
+#include <stdlib.h>       /* malloc */
+#include <string.h>       /* strlen */
+#include <termios.h>      /* termios */
+#include <netdb.h>        /* gethostbyname */
+#include <arpa/inet.h>    /* inet_ntoa */
 
 #define h_addr h_addr_list[0]
+#define INPUT_SIZE 128    /* Size of buffers used */
 
-
-
-
-
-int url_getInput(const char * message, char ** input, unsigned int * size)
+int url_getInput(const char * message, char ** input, size_t * size)
 {
-  char temp[64];
-
+  char temp[INPUT_SIZE];
   printf("%s: ", message);
+
   if( fgets(temp, sizeof(temp), stdin) == NULL)
   {
+    fprintf(stderr, "Error: fgets\n");
     return 1;
   }
 
@@ -33,24 +28,26 @@ int url_getInput(const char * message, char ** input, unsigned int * size)
   return 0;
 }
 
-int url_getPassword(char ** password, unsigned int * size)
+int url_getPassword(char ** password, size_t * size)
 {
   struct termios oldFlags, newFlags;
-  char temp[64];
+  char temp[INPUT_SIZE];
 
-  tcgetattr(fileno(stdin), &oldFlags); /* Saving old config */
+  tcgetattr(fileno(stdin), &oldFlags); /* Saving old stdin configuration */
   newFlags = oldFlags;
   newFlags.c_lflag &= ~ECHO;			/* Disabling echo */
   newFlags.c_lflag |= ECHONL;
 
-  if (tcsetattr(fileno(stdin), TCSANOW, &newFlags) != 0) {
-    perror("tcsetattr");	/* Failed to change config */
+  if (tcsetattr(fileno(stdin), TCSANOW, &newFlags) != 0)
+  {
+    fprintf(stderr, "Error: tcsetattr\n");  /* Failed to change configuration */
     return 1;
   }
 
   printf("Password: ");
   if( fgets(temp, sizeof(temp), stdin) == NULL)
   {
+    fprintf(stderr, "Error: fgets\n");
     return 1;
   }
 
@@ -58,9 +55,10 @@ int url_getPassword(char ** password, unsigned int * size)
   *password = (char *) malloc(*size);
   strncpy(*password, temp, *size);
 
-  if (tcsetattr(fileno(stdin), TCSANOW, &oldFlags) != 0) {
-      perror("tcsetattr");	/* Failed to restore config */
-      return 1;
+  if (tcsetattr(fileno(stdin), TCSANOW, &oldFlags) != 0)
+  {
+    fprintf(stderr, "Error: tcsetattr\n");  /* Failed to restore configuration */
+    return 1;
   }
 
   return 0;
@@ -70,8 +68,9 @@ int url_getIP(const char * host, char * ip)
 {
   struct hostent * h;
 
-  if (( h = gethostbyname(host) ) == NULL) {
-    perror("gethostbyname");
+  if (( h = gethostbyname(host) ) == NULL)
+  {
+    fprintf(stderr, "Error: gethostbyname\n"); /* Failed to get IP */
     return 1;
   }
 
@@ -84,49 +83,51 @@ int url_getIP(const char * host, char * ip)
 
 int url_parser(const char * path, URL * url)
 {
-  char * temp;
-  unsigned int offset = 6;
-
-  if (strncmp(path, "ftp://", 6)) /* Se o path não começa por ftp:// não é válido */
+  if (strncmp(path, "ftp://", 6)) /* Paths must begin with "ftp://" to be valid */
   {
-    printf("Error: FTP URL não começa por \"ftp://\"\n");
+    fprintf(stderr, "Error: FTP URL must start with \"ftp://\"\n");
     return 1;
   }
 
-  if(path[offset] == '[') /* Pode ter user e pass especificados */
+  char * temp;
+  unsigned int offset = 6;
+
+  if(path[offset] == '[') /* If user and password are specidied */
   {
-    unsigned int offsetBracket = offset;
+    unsigned int offsetBracket = offset; /* Index of the bracket (start of user) */
 
     while (1)
     {
-      if((temp = strchr(path + offsetBracket, ']')) <= 0) /* user e pass não especificados */
-        break;
+      /* Get first occorrence of ']' after offsetBracket */
+      if((temp = strchr(path + offsetBracket, ']')) <= 0)
+        break;  /* user and pass are not specified */
 
-      offsetBracket = strlen(path) - strlen(temp);
+      offsetBracket = strlen(path) - strlen(temp);  /* Index of ']' */
 
-      if( path[offsetBracket - 1] == '@') /* Fim da pass */
+      if( path[offsetBracket - 1] == '@') /* End of password field */
       {
         if((temp = strchr(path + offset, ':')) > 0) /* USER */
         {
           url->userSize = strlen(path) - strlen(temp) - offset - 1;
           url->user = (char *) malloc( url->userSize);
           strncpy(url->user, path + offset + 1, url->userSize);
-          offset += url->userSize + 2;
+          offset += url->userSize + 2;  /* offset becomes the start of password */
         }
 
         url->passwordSize = offsetBracket - offset - 1;
         url->password = (char *) malloc( url->passwordSize);
         strncpy(url->password, path + offset, url->passwordSize);
-        offset = offsetBracket + 1;
+        offset = offsetBracket + 1; /* offset becomes the start of the host */
         break;
       }
-      offsetBracket++;
+
+      offsetBracket++; /* So that the loop doesn't process always the same bracket */
     }
   }
 
-  if ((temp = strchr(path + offset, '/'))) /* Tem path */
+  if ((temp = strchr(path + offset, '/'))) /* Path is specified */
   {
-    unsigned int offsetPath = strlen(path) - strlen(temp) + 1;
+    unsigned int offsetPath = strlen(path) - strlen(temp) + 1; /* Start of path (after '/') */
     url->pathSize = strlen(temp) - 1;
     if(url->pathSize > 0)
     {
@@ -137,7 +138,7 @@ int url_parser(const char * path, URL * url)
 
   url->hostSize = strlen(path) - offset - url->pathSize;
 
-  if(url->pathSize > 0) /* Ter em consideração '/' */
+  if(url->pathSize > 0) /* If Path was specified we mustn't include '/' in the host name */
     url->hostSize--;
 
   if(url->hostSize > 0)

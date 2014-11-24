@@ -1,11 +1,11 @@
 #include "ftp.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <unistd.h>
-#include <arpa/inet.h>
+#include <stdio.h>        /* printf */
+#include <stdlib.h>       /* malloc */
+#include <string.h>       /* strlen */
+#include <strings.h>      /* bzero */
+#include <unistd.h>       /* read / write */
+#include <arpa/inet.h>    /* inet_addr */
 
 int ftp_connect(const char * ip, const int port, int * socket_fd)
 {
@@ -19,129 +19,146 @@ int ftp_connect(const char * ip, const int port, int * socket_fd)
 
   /*open an TCP socket*/
   if ((*socket_fd = socket(AF_INET,SOCK_STREAM,0)) < 0) {
-    perror("socket()");
+    fprintf(stderr, "Error: socket()\n");
     return 1;
   }
 
   /*connect to the server*/
   if(connect(*socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
   {
-    perror("connect()");
+    fprintf(stderr, "Error: connect()\n");
     return 1;
   }
 
-  char temp[INPUT_SIZE] = "";
-  if(ftp_read(*socket_fd, temp, INPUT_SIZE))
-  {
-    perror("ftp_read");
-    return 1;
-  }
-  printf("%s", temp);
-  
   return 0;
 }
 
 int ftp_disconnect(FTP * ftp)
 {
+  /* Send QUIT command to end connection */
   if(ftp_write(ftp->control_socket_fd, "QUIT\n"))
   {
-    perror("ftp_disconnect");
+    fprintf(stderr, "Error: ftp_disconnect\n");
     return 1;
   }
 
-  if (ftp->control_socket_fd) {
-    ftp->control_socket_fd = 0;
-    close(ftp->control_socket_fd);
+  /* Close sockets */
+  close(ftp->control_socket_fd);
+  close(ftp->data_socket_fd);
+
+  return 0;
+}
+
+int ftp_read(const int socket_fd, char * message, size_t size)
+{
+  /* Read message from the server */
+  int res = read(socket_fd, message, size);
+  if(res < 0)
+  {
+    fprintf(stderr, "Error: read\n");
+    return 1;
   }
 
-  if (ftp->data_socket_fd) {
-    close(ftp->data_socket_fd);
-    ftp->data_socket_fd = 0;
+  return (res == 0);
+}
+
+int ftp_write(const int socket_fd, const char * message)
+{
+  /* Write message to the server */
+  if(write(socket_fd, message, strlen(message)) < 0)
+  {
+    fprintf(stderr, "Error: write\n");
+    return 1;
   }
 
   return 0;
 }
 
-int ftp_login(const char * user, const char * password, FTP * ftp)
+int ftp_login(FTP * ftp, const char * user, const char * password)
 {
-    char temp[INPUT_SIZE] = "";
+    char buffer[INPUT_SIZE] = "";
 
-    sprintf(temp, "USER %s\n", user);
-    if(ftp_write(ftp->control_socket_fd, temp))
+    /* Send user */
+    sprintf(buffer, "USER %s\n", user);
+    if(ftp_write(ftp->control_socket_fd, buffer))
     {
-      perror("ftp_write");
+      fprintf(stderr, "Error: ftp_write\n");
       return 1;
     }
+    memset(buffer, 0, strlen(buffer));
 
-    if(ftp_read(ftp->control_socket_fd, temp, INPUT_SIZE))
+    /* Read response for the user */
+    if(ftp_read(ftp->control_socket_fd, buffer, INPUT_SIZE))
     {
-      perror("ftp_read");
+      fprintf(stderr, "Error: ftp_read\n");
       return 1;
     }
-    printf("%s", temp);
-    memset(temp, 0, INPUT_SIZE);
+    printf("%s", buffer);
+    memset(buffer, 0, strlen(buffer));
 
-    sprintf(temp, "PASS %s\n", password);
-    if(ftp_write(ftp->control_socket_fd, temp))
+    /* Send password */
+    sprintf(buffer, "PASS %s\n", password);
+    if(ftp_write(ftp->control_socket_fd, buffer))
     {
-      perror("ftp_write");
+      fprintf(stderr, "Error: ftp_write\n");
       return 1;
     }
+    memset(buffer, 0, strlen(buffer));
 
-    if(ftp_read(ftp->control_socket_fd, temp, INPUT_SIZE))
+    /* Read response for the password */
+    if(ftp_read(ftp->control_socket_fd, buffer, INPUT_SIZE))
     {
-      perror("ftp_read");
+      fprintf(stderr, "Error: ftp_read\n");
       return 1;
     }
-    printf("%s", temp);
+    printf("%s", buffer);
+    memset(buffer, 0, strlen(buffer));
 
-    if(temp[0] == '5')
+    /* Detects Invalid Password Response */
+    if(buffer[0] == '5')
     {
-      perror("wrong password");
+      fprintf(stderr, "Error: wrong password\n");
       return 1;
     }
 
     return 0;
 }
 
-int ftp_read(const int socket_fd, char * message, size_t size)
-{
-  if(read(socket_fd, message, size) <= 0)
-  {
-    perror("read");
-    return 1;
-  }
-
-  return 0;
-}
-
-int ftp_write(const int socket_fd, const char * message)
-{
-  if(write(socket_fd, message, strlen(message)) < 0)
-  {
-    perror("write");
-    return 1;
-  }
-
-  return 0;
-}
-
 int ftp_download(FTP * ftp, const char * path)
 {
-  FILE* f = fopen(path, "w");
-  if (!f) {
-    perror("fopen");
-    return -1;
+  const char * offset = strrchr(path, '/'); /* Pointes to the last occorence of '/' */
+  FILE *f;
+
+  if(!offset)  /* No occorrence of '/' filename is the path itself */
+  {
+    f = fopen(offset, "w");
+  }
+  else
+    f = fopen(offset + 1, "w");
+
+  if (!f)   /* Failed to create/open file */
+  {
+    fprintf(stderr, "Error: fopen\n");
+    return 1;
   }
 
   char buffer[INPUT_SIZE];
-  int res;
 
+  /* Sends retr command */
+  sprintf(buffer, "%s %s\n", "retr", path);
+  if(ftp_write(ftp->control_socket_fd, buffer))
+  {
+    fprintf(stderr, "Error: ftp_write\n");
+    return 1;
+  }
+  memset(buffer, 0, strlen(buffer));
+
+  /* Receives File from the server and writes to the file */
   while(!ftp_read(ftp->data_socket_fd, buffer, INPUT_SIZE))
   {
-    if(fwrite(buffer, strlen(buffer), 1, f) != strlen(buffer))
+    if(fwrite(buffer, strlen(buffer), 1, f) < 0)
     {
-      perror("fwrite");
+      fprintf(stderr, "Error: fwrite\n");
       fclose(f);
       return 1;
     }
@@ -155,36 +172,39 @@ int ftp_pasv(FTP * ftp)
 {
   char buffer[INPUT_SIZE];
 
+  /* Sends pasv command */
   if(ftp_write(ftp->control_socket_fd, "PASV\n"))
   {
-    perror("ftp_write");
+    fprintf(stderr, "Error: ftp_write\n");
     return 1;
   }
 
+  /* Reads response (IP + Port) */
   if(ftp_read(ftp->control_socket_fd, buffer, INPUT_SIZE))
   {
-    perror("ftp_read");
+    fprintf(stderr, "Error: ftp_read\n");
     return 1;
   }
+  printf("%s", buffer);
 
   int ip1, ip2, ip3, ip4, port1, port2;
-  if(!sscanf(buffer, "227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)", &ip1, &ip2, &ip3, &ip4, &port1, &port2))
+  if(!sscanf(strchr(buffer, '('), "(%d,%d,%d,%d,%d,%d)", &ip1, &ip2, &ip3, &ip4, &port1, &port2))
   {
-    perror("sscanf");
+    fprintf(stderr, "Error: sscanf\n");
     return 1;
   }
 
   char ip[MAX_IP_SIZE];
   if(!sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4))
   {
-    perror("sprintf");
+    fprintf(stderr, "Error: sprintf\n");
     return 1;
   }
 
   int port = port1 * 256 + port2;
   if(ftp_connect(ip, port, &ftp->data_socket_fd))
   {
-    perror("ftp_connect");
+    fprintf(stderr, "Error: ftp_connect\n");
     return 1;
   }
 
