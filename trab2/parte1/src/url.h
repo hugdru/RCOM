@@ -6,7 +6,7 @@
 /**
 * Struct that contains the fields parsed in a FTP URL and needed for a FTP connection
 */
-typedef struct {
+typedef struct URL {
   char * user;      /* user name*/
   char * password;  /* password of the user */
   char * host;      /* FTP host name*/
@@ -46,5 +46,11 @@ int url_getInput(const char * message, char ** input, size_t * size);
 * @return Returns 0 in case of success, 1 in case of error
 */
 int url_getIP(const char * host, char * ip);
+
+/**
+* Deallocates URL fields
+* @arg url URL struct to clear
+*/
+void url_clear(URL * url);
 
 #endif

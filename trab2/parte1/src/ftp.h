@@ -9,8 +9,7 @@
 /**
 * Struct that contained the file descriptors of the sockets used in the FTP connection
 */
-typedef struct
-{
+typedef struct FTP {
   int data_socket_fd;       /* Data Socket File Descriptor */
   int control_socket_fd;    /* Control Socket File Descriptor */
 } FTP;
