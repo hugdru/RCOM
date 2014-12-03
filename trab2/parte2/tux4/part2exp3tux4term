@@ -1,0 +1,34 @@
+tux54:~# ifconfig 
+eth0      Link encap:Ethernet  HWaddr 00:21:5a:c3:78:70  
+          inet addr:172.16.50.254  Bcast:172.16.50.255  Mask:255.255.255.0
+          inet6 addr: fe80::221:5aff:fec3:7870/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:5118 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:3470 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:4707289 (4.4 MiB)  TX bytes:453121 (442.5 KiB)
+          Interrupt:17 
+
+eth1      Link encap:Ethernet  HWaddr 00:c0:df:08:d5:b0  
+          inet addr:172.16.51.253  Bcast:172.16.51.255  Mask:255.255.255.0
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+          Interrupt:20 Base address:0x2000 
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+tux54:~# route-n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.50.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+172.16.51.0     0.0.0.0         255.255.255.0   U     0      0        0 eth1
+

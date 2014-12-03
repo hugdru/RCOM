@@ -1,0 +1,19 @@
+tux51:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.1.0      0.0.0.0         255.255.255.0   U     0      0        0 eth0
+tux51:~# arp -a
+? (172.16.1.24) at 00:22:64:a6:a4:f1 [ether] on eth0
+? (172.16.1.43) at 00:21:5a:61:2f:d4 [ether] on eth0
+? (172.16.1.11) at <incomplete> on eth0
+? (172.16.1.254) at 00:21:5a:c3:78:70 [ether] on eth0
+tux51:~# arp -d 172.16.1.24
+tux51:~# arp -d 172.16.1.43
+tux51:~# arp -d 172.16.1.11
+tux51:~# arp -d 172.16.1.254
+tux51:~# arp -a
+? (172.16.1.24) at <incomplete> on eth0
+? (172.16.1.43) at <incomplete> on eth0
+? (172.16.1.11) at <incomplete> on eth0
+? (172.16.1.254) at <incomplete> on eth0
+

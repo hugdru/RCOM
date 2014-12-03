@@ -1,0 +1,26 @@
+tux52:~# ifconfig
+eth0      Link encap:Ethernet  HWaddr 00:21:5a:61:2f:d6  
+          inet addr:172.16.51.1  Bcast:172.16.51.255  Mask:255.255.255.0
+          inet6 addr: fe80::221:5aff:fe61:2fd6/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:117 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:15 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:9000 (8.7 KiB)  TX bytes:1530 (1.4 KiB)
+          Interrupt:17 
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:15 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:15 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:1260 (1.2 KiB)  TX bytes:1260 (1.2 KiB)
+
+tux52:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.50.0     172.16.51.253   255.255.255.0   UG    0      0        0 eth0
+172.16.51.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+tux52:~#
