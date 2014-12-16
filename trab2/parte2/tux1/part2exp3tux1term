@@ -1,0 +1,42 @@
+tux51:~# ping 172.16.50.254
+PING 172.16.50.254 (172.16.50.254) 56(84) bytes of data.
+64 bytes from 172.16.50.254: icmp_req=1 ttl=64 time=0.188 ms
+64 bytes from 172.16.50.254: icmp_req=2 ttl=64 time=0.379 ms
+64 bytes from 172.16.50.254: icmp_req=3 ttl=64 time=0.371 ms
+64 bytes from 172.16.50.254: icmp_req=4 ttl=64 time=0.364 ms
+64 bytes from 172.16.50.254: icmp_req=5 ttl=64 time=0.363 ms
+64 bytes from 172.16.50.254: icmp_req=6 ttl=64 time=0.390 ms
+64 bytes from 172.16.50.254: icmp_req=7 ttl=64 time=0.174 ms
+64 bytes from 172.16.50.254: icmp_req=8 ttl=64 time=0.367 ms
+^C
+--- 172.16.50.254 ping statistics ---
+8 packets transmitted, 8 received, 0% packet loss, time 6997ms
+rtt min/avg/max/mdev = 0.174/0.324/0.390/0.085 ms
+tux51:~# ping 172.16.51.253
+PING 172.16.51.253 (172.16.51.253) 56(84) bytes of data.
+64 bytes from 172.16.51.253: icmp_req=1 ttl=64 time=0.276 ms
+64 bytes from 172.16.51.253: icmp_req=2 ttl=64 time=0.380 ms
+64 bytes from 172.16.51.253: icmp_req=3 ttl=64 time=0.283 ms
+64 bytes from 172.16.51.253: icmp_req=4 ttl=64 time=0.368 ms
+64 bytes from 172.16.51.253: icmp_req=5 ttl=64 time=0.366 ms
+64 bytes from 172.16.51.253: icmp_req=6 ttl=64 time=0.384 ms
+64 bytes from 172.16.51.253: icmp_req=7 ttl=64 time=0.305 ms
+64 bytes from 172.16.51.253: icmp_req=8 ttl=64 time=0.297 ms
+^C
+--- 172.16.51.253 ping statistics ---
+8 packets transmitted, 8 received, 0% packet loss, time 6997ms
+rtt min/avg/max/mdev = 0.276/0.332/0.384/0.046 ms
+tux51:~# ping 172.16.51.1
+PING 172.16.51.1 (172.16.51.1) 56(84) bytes of data.
+64 bytes from 172.16.51.1: icmp_req=1 ttl=63 time=0.532 ms
+64 bytes from 172.16.51.1: icmp_req=2 ttl=63 time=0.497 ms
+64 bytes from 172.16.51.1: icmp_req=3 ttl=63 time=0.466 ms
+64 bytes from 172.16.51.1: icmp_req=4 ttl=63 time=0.479 ms
+64 bytes from 172.16.51.1: icmp_req=5 ttl=63 time=0.497 ms
+64 bytes from 172.16.51.1: icmp_req=6 ttl=63 time=0.504 ms
+64 bytes from 172.16.51.1: icmp_req=7 ttl=63 time=0.481 ms
+64 bytes from 172.16.51.1: icmp_req=8 ttl=63 time=0.256 ms
+^C
+--- 172.16.51.1 ping statistics ---
+8 packets transmitted, 8 received, 0% packet loss, time 6997ms
+rtt min/avg/max/mdev = 0.256/0.464/0.532/0.080 ms
