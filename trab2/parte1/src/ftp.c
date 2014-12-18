@@ -75,7 +75,6 @@ int ftp_login(FTP * ftp, const char * user, const char * password) {
     fprintf(stderr, "Error: ftp_read\n");
     return 1;
   }
-  printf("%s", buffer);
 
   /* Send password */
   sprintf(buffer, "PASS %s\n", password);
@@ -89,7 +88,6 @@ int ftp_login(FTP * ftp, const char * user, const char * password) {
     fprintf(stderr, "Error: ftp_read\n");
     return 1;
   }
-  printf("%s", buffer);
 
   /* Detects Invalid Password Response */
   if(buffer[0] == '5') {

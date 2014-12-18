@@ -95,13 +95,13 @@ int url_parser(const char * path, URL * url) {
       if( path[offsetBracket - 1] == '@') { /* End of password field */
         if((temp = strchr(path + offset, ':')) > 0) { /* USER */
           url->userSize = strlen(path) - strlen(temp) - offset - 1;
-          url->user = (char *) malloc( url->userSize);
+          url->user = (char *) malloc( url->userSize+1);
           strncpy(url->user, path + offset + 1, url->userSize);
           offset += url->userSize + 2;  /* offset becomes the start of password */
         }
 
         url->passwordSize = offsetBracket - offset - 1;
-        url->password = (char *) malloc( url->passwordSize);
+        url->password = (char *) malloc( url->passwordSize+1);
         strncpy(url->password, path + offset, url->passwordSize);
         offset = offsetBracket + 1; /* offset becomes the start of the host */
         break;
@@ -114,7 +114,7 @@ int url_parser(const char * path, URL * url) {
     unsigned int offsetPath = strlen(path) - strlen(temp) + 1; /* Start of path (after '/') */
     url->pathSize = strlen(temp) - 1;
     if(url->pathSize > 0) {
-      url->path = (char *) malloc( url->pathSize);
+      url->path = (char *) malloc( url->pathSize+1);
       strncpy(url->path, path + offsetPath, url->pathSize);
     }
   }
@@ -125,7 +125,7 @@ int url_parser(const char * path, URL * url) {
     url->hostSize--;
 
   if(url->hostSize > 0) {
-    url->host = (char *) malloc( url->hostSize * sizeof(char) );
+    url->host = (char *) malloc( url->hostSize * sizeof(char)+1);
     strncpy(url->host, path + offset, url->hostSize);
   }
 

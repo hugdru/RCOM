@@ -57,6 +57,7 @@ int main(int argc, char * argv[]) {
   }
 
   char temp[INPUT_SIZE];
+  memset(temp, 0, INPUT_SIZE);
   if(ftp_read(ftp.control_socket_fd, temp, INPUT_SIZE)) { /* Read Server Connection Welcome */
     fprintf(stderr, "Error: ftp_read\n");
     goto disconnect;
