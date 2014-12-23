@@ -44,6 +44,14 @@ usados para chegar às conclusões presentes ao longo do relatório encontram-se
 na pasta parte2 e o código da aplicação ftp na pasta parte1.
 
 \section{Parte 1}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.30\textwidth]{FTP_Struct.PNG}
+    \caption{Estrutura Bundle presente no ficheiro \textit{bundle.h}}
+\end{figure}
+
+
 A aplicação consiste em três componentes: FTP, URL e download.
 O componente FTP é responsável pela comunicação com o servidor FTP usando Berkeley Sockets. As suas funções fornecem os meios para o estabelecimento das conexões TCP (controlo e dados), a terminação dessas conexões, e a transferência de dados. Este componente não tem visibilidade para nenhum dos outros componentes da aplicação.
 O componente URL é responsável por fazer parser do URL FTP passado para a aplicação como argumento na linha de comandos, retirando o host, path, user e password. Caso um, ou vários, destes parâmetros estejam em falta, URL também fornece os meios para os obter perguntando ao utilizador para os introduzir. Este componente também não tem visibilidade para nenhum dos outros componentes da aplicação.
@@ -59,6 +67,13 @@ Cada um das strings da estrutura URL correspondem a parâmetros necessários no 
 Foi testado a aplicação de download usando vários servidores FTP da FEUP, incluindo ftp.up.pt, pinguim.fe.up.pt e mirrors.fe.up.pt. Todos os download foram efetuados com sucesso, incluindo os testados na experiência 6 e na demostração da aplicação.
 
 \section{Parte 2}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.55\textwidth]{ArquitecturaNasExperiencias/exp6.png}
+    \caption{Estrutura Bundle presente no ficheiro \textit{bundle.h}}
+\end{figure}
+
 \subsection{Experiência 1}
 
 \subsubsection{What are the ARP packets and what are they used for?}
