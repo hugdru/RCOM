@@ -291,8 +291,11 @@ As três fases duma conexão TCP são: connection estabelishment, data transfer 
 fields? What relevant information can be observed in the logs?}
 
 O receptor não faz request de retransmissão de pacotes perdidos. O transmissor espera pelo ACK e quando
-não recebe, reenvia os pacotes após um intervalo. Pode ser implementado de várias formas (Stop-and-wait, Go-Back-N,
+não o recebe, reenvia os pacotes após um certo intervalo. Pode ser implementado de várias formas (Stop-and-wait, Go-Back-N,
 Selective Repeat).
+O TCP header contém campos como o porto da fonte e o porto do destinatário, o número de sequência, o número de acknowledgement e
+o tamanho da window.
+É atribuido um número de sequência a cada byte de dados, sendo que o número de sequência do TCP header é o do primeiro byte de dados desse pacote. O número de acknowledge indica o número de sequência que o receptor espera do emissor e o tamanho da window indica o número de bytes que o receptor está disposto a receber.
 
 \subsubsection{How does the TCP congestion control mechanism work? What are the
 relevant fields. How did the throughput of the data connection evolve
