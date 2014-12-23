@@ -19,7 +19,7 @@
 \setlength{\textwidth}{16cm} \setlength{\textheight}{22cm}
 
 \title{\Huge\textbf{Rede de Computadores}\linebreak\linebreak\linebreak\linebreak \Large\textbf{Relatório \\
-    Trabalho1}\linebreak\linebreak\linebreak\includegraphics[height=6cm,
+    Trabalho2}\linebreak\linebreak\linebreak\includegraphics[height=6cm,
     width=7cm]{feup.pdf}\linebreak \linebreak \Large{Mestrado Integrado em
     Engenharia Informática e Computação} \linebreak \linebreak \Large\textbf{Redes de
 Computadores}\linebreak}
@@ -44,7 +44,19 @@ usados para chegar às conclusões presentes ao longo do relatório encontram-se
 na pasta parte2 e o código da aplicação ftp na pasta parte1.
 
 \section{Parte 1}
+A aplicação consiste em três componentes: FTP, URL e download. 
+O componente FTP é responsável pela comunicação com o servidor FTP usando Berkeley Sockets. As suas funções fornecem os meios para o estabelecimento das conexões TCP (controlo e dados), a terminação dessas conexões, e a transferência de dados. Este componente não tem visibilidade para nenhum dos outros componentes da aplicação.
+O componente URL é responsável por fazer parser do URL FTP passado para a aplicação como argumento na linha de comandos, retirando o host, path, user e password. Caso um, ou vários, destes parâmetros estejam em falta, URL também fornece os meios para os obter perguntando ao utilizador para os introduzir. Este componente também não tem visibilidade para nenhum dos outros componentes da aplicação.
+O componente download utilza os outros componentes para fazer o download do ficheiro.
 
+\subsubsection{Componente FTP}
+O componete FTP estabelece a ligação FTP na função ftp_connect(), utilizando Berkeley Sockets para estabelecer as conexões TCP. O file descriptor data_socket_fd corresponde à conexão de dados e control_socket_fd à conexão de controlo.
+
+\subsubsection{Componente URL}
+Cada um das strings da estrutura URL correspondem a parâmetros necessários no estabelecimento da conexão FTP e no download do ficheiro e são retirados do URL recebido como argumento da linha de comandos ou inserida pelo utilizador. Caso o utilizador não tenha especificado a password no argumento da linha de comandos, então é pedida sem haver echo, não sendo mostrada no monitor e sendo uma alternativa mais segura para a introdução da password.
+
+\subsubsection{Successful Download}
+Foi testado a aplicação de download usando vários servidores FTP da FEUP, incluindo ftp.up.pt, pinguim.fe.up.pt e mirrors.fe.up.pt. Todos os download foram efetuados com sucesso, incluindo os testados na experiência 6 e na demostração da aplicação.
 
 \section{Parte 2}
 \subsection{Experiência 1}
