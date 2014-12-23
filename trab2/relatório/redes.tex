@@ -35,19 +35,13 @@ Computadores}\linebreak}
 \newpage
 
 \section{Introdução}
-%indicação dos objectivos do trabalho e do relatório; descrição da lógica do
-%relatório com indicações sobre o tipo de informação que poderá ser encontrada
-%em cada uma secções seguintes
 Este trabalho laboratorial, desenvolvido no âmbito da Unidade Curricular de
-Redes de Computadores (RCOM), teve como objetivo implementar um protocolo de
-ligação de dados, do tipo acknowledged connection-oriented, e testá-lo em
-diversas situações de stress de modo a verificar a sua robustez. Ao longo deste
+Redes de Computadores (RCOM), teve como objetivo desenvolver uma aplicação ftp
+e compreender/implementar/configurar uma rede de computadores. Ao longo deste
 relatório, serão descritos os aspetos fundamentais do referido trabalho,
-permitindo obter um conhecimento detalhado deste. Será apresentada a
-arquitetura, estrutura do código, casos de uso principais, protocolo de ligação
-lógica e de aplicação. No mesmo sentido, serão apresentadas a validação dos
-resultados e os elementos de valorização.
-
+permitindo obter um conhecimento detalhado deste. Os ficheiros de análise
+usados para chegar às conclusões presentes ao longo do relatório encontram-se
+na pasta parte2 e o código da aplicação ftp na pasta parte1.
 
 \section{Parte 1}
 
@@ -70,7 +64,7 @@ Os endereços MAC do emissor e do alvo estão localizados no header do Ethernet 
 \subsubsection{How to determine if a receiving Ethernet frame is ARP, IP, ICMP?}
 O campo type da header do Ethernet frame indica o tipo de pacote, o seu valor é 0x0806 para pacotes do tipo ARP e 0x0800 para pacotes do tipo IP. Os pacotes IP com o campo protocol com valor 1 são pacotes ICMP.
 
-6. How to determine the length of a receiving frame?
+\subsubsection{How to determine the length of a receiving frame?}
 Se o campo type do Ethernet Frame tiver valor igual ou inferior a 1500, então esse valor indica o tamanho do payload, senão indica o tipo de pacote.
 
 \subsubsection{What is the loopback interface and why is it important?}
@@ -291,17 +285,13 @@ along the time? Is it according the TCP congestion control mechanism?}
 \section{Conclusões}
 %síntese da informação apresentada nas secções anteriores; reflexão sobre os
 %objectivos de aprendizagem alcançados
-O projeto desenvolvido resultou numa aplicação capaz de transferir ficheiros e
-mensagens através duma ligação com a porta série RS-232 (comunicação
-assíncrona). Ligação esta customizada pelo utilizador através de argumentos na
-linha de comandos. A separação e encapsulamento das várias partes do projeto
-facilitou o seu desenvolvimento, uma vez que tornou a linklayer completamente
-independente da applayer, e a applayer do
-parser. Um dos pontos que queríamos garantir já de partida. A elaboração deste
-trabalho contribuiu para a aprendizagem dos conhecimentos básicos de
-funcionamento de um protocolo de dados e de como o implementar de maneira
-robusta. O trabalho foi realizado com sucesso, dado que passou todos os
-testes feitos na demonstração e porque foram cumpridos todos os elementos de
-valorização apresentados pelo professor.
+A elaboração deste trabalho contribuiu para a aprendizagem dos conhecimentos
+básicos do protocolo ftp, tal como o modo de estruturação e configuração de
+componentes de uma rede de computadores. O projecto  desenvolvido resultou numa
+aplicação capaz de fazer o download de ficheiros via ftp em modo passivo, com
+ou sem autenticação. E numa rede atual funcional. O trabalho foi realizado com
+sucesso e com grande entusiasmo, visto que, compreendemos a maneira como o
+protocolo ftp funciona e como implementá-lo, e como criar a nossa própria rede de
+computadores. Goodbye MEO router, welcome openwrt :).
 
 \end{document}
