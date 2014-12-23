@@ -290,7 +290,8 @@ fields? What relevant information can be observed in the logs?}
 
 \subsubsection{How does the TCP congestion control mechanism work? What are the
 relevant fields. How did the throughput of the data connection evolve
-along the time? Is it according the TCP congestion control mechanism?}
+along the time? Is it according to the TCP congestion control mechanism?}
+Existem vários mecanismos de controlo de congestionamento TCP. Cada um deles possui algoritmos de controlo de congestionamento juntamento com outras abordagens. Por exemplo: Slow start; Congestion avoidance; Fast retransmit; Fast Recovery; etc. Exemplos de mecanismos que usam alguns destes algoritmos: TCP Tahoe; TCP Newreno; TCP Vegas; etc. Slow start, funciona através de acknowledgements e duas janelas, uma no receptor e outra no emissor estando o emissor dependente destas. Congestion avoidance, um timer de retransmissão, recepção de duplicados e a alerta desta situação ao emissor. Fast retransmit, maneira estratégica de lidar com ACKs duplicados de maneira a não haver esperas. O throughput evolui até um determinado ponto e diminui quando há congestionamento e depois retoma. Consequência do mecanismo exibir um cariz Slow start. O mecanismo pode ser observado em /proc/sys/net/ipv4/tcp\_congestion\_control.
 
 \subsubsection{Is the throughput of a TCP data connections disturbed by the appearance of a second TCP connection? How?}
 
