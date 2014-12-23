@@ -300,6 +300,7 @@ along the time? Is it according to the TCP congestion control mechanism?}
 Existem vários mecanismos de controlo de congestionamento TCP. Cada um deles possui algoritmos de controlo de congestionamento juntamento com outras abordagens. Por exemplo: Slow start; Congestion avoidance; Fast retransmit; Fast Recovery; etc. Exemplos de mecanismos que usam alguns destes algoritmos: TCP Tahoe; TCP Newreno; TCP Vegas; etc. Slow start, funciona através de acknowledgements e duas janelas, uma no receptor e outra no emissor estando o emissor dependente destas. Congestion avoidance, um timer de retransmissão, recepção de duplicados e a alerta desta situação ao emissor. Fast retransmit, maneira estratégica de lidar com ACKs duplicados de maneira a não haver esperas. O throughput evolui até um determinado ponto e diminui quando há congestionamento e depois retoma. Consequência do mecanismo exibir um cariz Slow start. O mecanismo pode ser observado em /proc/sys/net/ipv4/tcp\_congestion\_control.
 
 \subsubsection{Is the throughput of a TCP data connections disturbed by the appearance of a second TCP connection? How?}
+Sim existe conflitos devido à existência de outra conexão TCP. Isto pode ser verificado através das linhas pretas no wireshark que indicam erros de ZeroWindow, ACKed unseen segment, Fast Retransmission, TCP Previous segment not captured, etc.
 
 \section{Conclusões}
 %síntese da informação apresentada nas secções anteriores; reflexão sobre os
