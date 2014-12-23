@@ -285,8 +285,14 @@ A informação de controlo FTP é transportada na conexão de controlo que liga 
 
 \subsubsection{What are the phases of a TCP connection?}
 
+As três fases duma conexão TCP são: connection estabelishment, data transfer e connection termination.
+
 \subsubsection{How does the ARQ TCP mechanism work? What are the relevant TCP
 fields? What relevant information can be observed in the logs?}
+
+O receptor não faz request de retransmissão de pacotes perdidos. O transmissor espera pelo ACK e quando
+não recebe, reenvia os pacotes após um intervalo. Pode ser implementado de várias formas (Stop-and-wait, Go-Back-N,
+Selective Repeat).
 
 \subsubsection{How does the TCP congestion control mechanism work? What are the
 relevant fields. How did the throughput of the data connection evolve
