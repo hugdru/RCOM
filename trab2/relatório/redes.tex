@@ -77,7 +77,7 @@ Os endereços MAC do emissor e do alvo estão localizados no header do Ethernet 
 O campo type da header do Ethernet frame indica o tipo de pacote, o seu valor é 0x0806 para pacotes do tipo ARP e 0x0800 para pacotes do tipo IP. Os pacotes IP com o campo protocol com valor 1 são pacotes ICMP.
 
 \subsubsection{How to determine the length of a receiving frame?}
-Se o campo type do Ethernet Frame tiver valor igual ou inferior a 1500, então esse valor indica o tamanho do payload, senão indica o tipo de pacote.
+O protocolo Ethernet II da Data Link Layer não contém nenhum campo para o tamanho do pacote. Isso é devido ao Physical Layer ter mecanismos em que percebe quando uma trama conheça e acaba, dependendo do meio de transmissão e do encoding.
 
 \subsubsection{What is the loopback interface and why is it important?}
 A interface loopback é uma interface (virtual) especial porque permite que um computador comunique com ele mesmo. Um dos exemplos mais comuns é poder-se ligar a um servidor que está em execução numa máquina local, nomeadamente: servidor dns, unbound; servidor http, lighttpd; servidor de filestorage, git-annex; servidor web search, yacy; servidor de impressão, cups; servidor  de encriptação de dns, dnscrypt; etc. Como é uma interface virtual permite que as aplicações e utilizadores comuniquem com um servidor (localmente) mesmo que não haja conexão internet. Para além disto, é usado para: testar configurações; fazer simulações; resolução de problemas entre aplicações de modo rápido. Pode haver uma rede de loopback interfaces 127.0.0.0/8, o que torna fácil correr servidores que corram numa mesma porta facilmente.
