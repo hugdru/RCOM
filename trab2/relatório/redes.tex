@@ -137,37 +137,41 @@ simulações de redes; etc. De modo rápido.
 
 \subsection{Experiência 2}
 
-\subsubsection{How to configure vlany0?}
+\subsubsection{Objetivos}
+Criação de duas LANs virtuais no switch, uma constituída pelo tuxy1 e tuxy4 e outro pelo tuxy2.
+Visto que se encontram em sub-redes diferentes, tuxy1 e tuxy4 não conseguem comunicar com tuxy2.
 
-Foram criadas duas vlans de modo a isolar as maquinas tux1 e tux4 da tux2. A interface eth0 da tux1 (172.16.y0.1) e tux4 (172.16.y0.254) foram ligadas ao switch e depois cada uma das portas foi adicionada a uma vlan y0; a tux2 (172.16.y0.2) foi configurada de igual modo só que a respetiva porta foi adicionada a outra vlan y1. Verificámos que não é possível comunicar com a máquina tux2, como seria de esperar.
-
-Comandos usados para criar cada uma das vlans
+\subsubsection{Comandos principais de configuração}
+Para configurar o switch conectou-se a porta série de uma das máquinas com o switch e usou-se o programa gtkterm para inserir os comandos necessários.
+Para adicionar cada uma das vlans ao switch, entrou-se na consola de configuração e criou-se a vlan com o identificador x0 usando os comandos:
 \begin{verbatim}
 configure terminal
 vlan x0
 end
 show vlan id x0
 \end{verbatim}
-
+Cada máquina foi ligada a uma porta do switch, configurou-se uma Fast Ethernet Interface para cada porta, e ligou-se as portas cujas máquinas tuxy1 e tuxy4 se conectaram à vlany0 e a porta da máquina tuxy2 à vlany1, usandos os comandos:
 \begin{verbatim}
-Comandos para adicionar uma dada porta a uma vlan
 configure terminal
 interface fastEthernet 0/porta
 switchport mode access
 switchport access vlan x0
 end
+\end{verbatim}
+Verificando as configurações:
+\begin{verbatim}
 show running-config interface fastEthernet 0/porta
 show interfaces fastEthernet 0/porta switchport
+50	VLAN0050									active		Fa0/1, Fa0/2
+51 	VLAN0051									active		Fa0/3
 \end{verbatim}
 
-\begin{verbatim}
-50   VLAN0050                         active    Fa0/1, Fa0/2
-51   VLAN0051                         active    Fa0/3
-\end{verbatim}
-
-\subsubsection{How many broadcast domains are there? How can you conclude it from the logs?}
-
-Existem dois domínios de broadcast, devido a existir duas vlans (sem interligação entre elas). Através dos logs verificamos que quando fazemos broadcast no tux1 só o tux4 responde. E quando fazemos broadcast no tux2 nenhuma máquina responde, porque não chega nenhum pedido às outras máquinas.
+\subsubsection{Análise das capturas}
+Foi executando um ping da máquina tuxy1 para a máquina tuxy4 o que foi possível visto que se encontram na mesma vlan, e o ping entre tux1 e tuxy2 não foi executado com sucesso, pois pertencem a vlans diferentes.
+Existem dois domínios de broadcast, devido a existir duas vlans (sem interligação entre elas).
+Através dos logs verificamos que quando fazemos broadcast no tuxy1 só o tuxy4 responde. E quando
+fazemos broadcast no tuxy2 nenhuma máquina responde, porque não chega nenhum pedido às
+outras máquinas.
 
 \subsection{Experiência 3}
 
