@@ -13,6 +13,7 @@
 \usepackage{ucs}
 \usepackage{etoolbox}
 \AtBeginEnvironment{tabular}{\noindent}
+\setlength\parindent{0pt}
 
 \begin{document}
 
@@ -41,7 +42,7 @@ e compreender/implementar/configurar uma rede de computadores. Ao longo deste
 relatório, serão descritos os aspetos fundamentais do referido trabalho,
 permitindo obter um conhecimento detalhado deste. Os ficheiros de análise
 usados para chegar às conclusões presentes ao longo do relatório encontram-se
-na pasta parte2 e o código da aplicação ftp na pasta parte1.
+na pasta parte2 e o código da aplicação ftp na pasta parte1. Só não foram colocados os ficheiros da última experiência devido ao tamanho dos mesmos.
 
 \section{Parte 1}
 
@@ -76,26 +77,64 @@ Foi testado a aplicação de download usando vários servidores FTP da FEUP, inc
 
 \subsection{Experiência 1}
 
-\subsubsection{What are the ARP packets and what are they used for?}
-ARP (Address Resolution Protocol) é um protocolo usado para obter um endereço da link layer, a partir de um endereço da network layer. Normalmente usado para obter o endereço MAC a partir de um endereço IP. O emissor difunde em broadcast um pacote ARP Request contendo o endereço IP do alvo e aguarda resposta do mesmo. O host alvo após recepção do pacote ARP Request responde em unicast, enviando um pacote ARP Reply contendo o seu endereço MAC. ARP é usado para construir e manter a ARP Table, contendo as relações de endereços da link layer e endereços da network layer, normalmente relacões entre um endereço MAC a um endereço IP. Entradas dinâmicas desta são frequentemente guardadas com um timeout de até 20 minutos, o que significa que após um host ter obtido um endereço MAC através do ARP Request, vai necessitar de o voltar a enviar após 20 minutos. Normalmente um host envia ARP Requests a todos os endereços listado na ARP Table periodicamente para renovar as entradas.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.55\textwidth]{ArquitecturaNasExperiencias/exp1.png}
+    \caption{Arquitetura da experiência 1}
+\end{figure}
 
-\subsubsection{What are the MAC and IP addresses of ARP packets and why?}
-Um pacote ARQ contém o endereço MAC e o endereço IP do emissor assim como os do alvo. Num pacote ARQ Request o emissor envia o seu endereço MAC, e IP e o endereço IP do alvo deixando o endereço MAC do alvo em branco. Num pacote ARQ Reply todos endereços são preenchidos.
+\subsubsection{Objetivos}
+Tentar interligar dois computadores através de um switch. E entender o funcionamento do protocolo ARP e do comando ping.
 
-\subsubsection{What packets does the ping command generate?}
-O comando ping envia para o alvo um pacote Echo Request, recebendo depois um pacote Echo Reply proveniente do host alvo.
+\subsubsection{Comandos principais de configuração}
+Foi dado reset aos equipamentos:
+\begin{verbatim}
+Computadores,
+    updateimage
+Switch,
+    no vlan 1-4094\newline
+    copy flash:tuxy-clean startup-config
+    reload
+\end{verbatim}
 
-\subsubsection{What are the MAC and IP addresses of the ping packets?}
-Os endereços MAC do emissor e do alvo estão localizados no header do Ethernet Frame e os endereços IP do emissor e alvo na header do pacote.
+E ligados os cabos do tux1(eth0) e tux4(eth0) ao switch. E configurados os ips de cada uma dessas interfaces:
+\begin{verbatim}
+Tux1,
+    ifconfig eth0 172.16.50.1/24
+Tux4,
+    ifconfig eth0 172.16.50.254/24
+\end{verbatim}
 
-\subsubsection{How to determine if a receiving Ethernet frame is ARP, IP, ICMP?}
-O campo type da header do Ethernet frame indica o tipo de pacote, o seu valor é 0x0806 para pacotes do tipo ARP e 0x0800 para pacotes do tipo IP. Os pacotes IP com o campo protocol com valor 1 são pacotes ICMP.
+E apagadas cada uma das linhas da arp table para cada um dos pcs:
+\begin{verbatim}
+arp -d ipaddress
+\end{verbatim}
 
-\subsubsection{How to determine the length of a receiving frame?}
-O protocolo Ethernet II da Data Link Layer não contém nenhum campo para o tamanho do pacote. Isso é devido ao Physical Layer ter mecanismos em que percebe quando uma trama conheça e acaba, dependendo do meio de transmissão e do encoding.
+\subsubsection{Análise das capturas}
+Uma vez que foram apagadas as linhas da arp table torna-se crucial investigar
+que máquina tem um dado ip. Tal é visível nos logs do wireshark, devido ao ping
+que fizemos para o tux4(ping 172.16.50.254). Do tux1 é feito um broadcast de
+uma trama ARP Request, que contém: o endereço IP do alvo; e a sua informação,
+ip e mac. Ficando à espera da resposta do alvo. Quando o tux4 capta esta
+mensagem, aceita-a porque tem o mesmo ip que o ip destino, e envia em unicast
+um pacote ARP Reply contendo o seu endereço MAC, juntamento com todos os outros
+dados. Quando o tux1 recebe esta mensagem é inserida uma entrada na sua ARP
+table, com o IP (network layer) e mac address (link layer) do tux4. O mesmo
+acontece ao tux4 se tiver a ARP table sem uma linha para 172.16.50.1. Para além
+disto, observámos que o comando ping gera um pacote Echo Request e espera por
+um Echo Reply do host alvo, sendo que os endereços do network layer e da link
+layer estão bem definidos e encontram-se respetivamente: na header do pacote, e
+no header do EthernetII Frame. Verificou-se também que há um campo na header da
+EthernetII frame que indica o tipo de protocolo, por exemplo se é ARP, IP ou
+ICMP. No entanto, não existe nenhum campo em que seja especificado o tamanho da
+trama (ao contrário do que acontece no pacote IP). Isto, deve-se ao facto do
+Physical Layer ter mecanismos de reconhecimento do início e fim de uma trama,
+dependentes da codificação e do meio de transmissão. Concluímos também que não
+é necessário haver um switch para uma máquina falar com ela própria, uma vez
+que existe uma rede de interfaces virtuais(loopback) que permitem isso mesmo.
+Necessário para: testar configurações; correr servidores localmente; fazer
+simulações de redes; etc. De modo rápido.
 
-\subsubsection{What is the loopback interface and why is it important?}
-A interface loopback é uma interface (virtual) especial porque permite que um computador comunique com ele mesmo. Um dos exemplos mais comuns é poder-se ligar a um servidor que está em execução numa máquina local, nomeadamente: servidor dns, unbound; servidor http, lighttpd; servidor de filestorage, git-annex; servidor web search, yacy; servidor de impressão, cups; servidor  de encriptação de dns, dnscrypt; etc. Como é uma interface virtual permite que as aplicações e utilizadores comuniquem com um servidor (localmente) mesmo que não haja conexão internet. Para além disto, é usado para: testar configurações; fazer simulações; resolução de problemas entre aplicações de modo rápido. Pode haver uma rede de loopback interfaces 127.0.0.0/8, o que torna fácil correr servidores que corram numa mesma porta facilmente.
 \subsection{Experiência 2}
 
 \subsubsection{How to configure vlany0?}
