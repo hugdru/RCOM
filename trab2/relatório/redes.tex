@@ -212,6 +212,7 @@ outras máquinas.
 \subsubsection{Objetivos}
 Transformar a máquina tuxy4 num router, permitindo a comunicação entre as duas sub-redes criadas na experiência anterior.
 
+\subsubsection{Comandos principais de configuração}
 Foi configurada a interface eth1 da máquina tuxy4 com IP 172.16.y1.253 e adicionada à vlan do tuxy2 (vlany1).
 
 Para que possa haver routing da parte do tuxy4 e para haver comunicação entre as sub-redes ativou-se o IP fowarding no tuxy4(router):
@@ -392,10 +393,9 @@ um processo em modo listening associado a essa porta.
 \subsection{Experiência 5 - DNS}
 
 \subsubsection{Objetivos}
-Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à Internet através da rede previamente criada.
+Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à Internet através da rede previamente criada. A arquitetura da rede continuou igual à da experiência anterior.
 
-A arquitetura da rede continuou igual à da experiência anterior.
-
+\subsubsection{Comandos principais de configuração}
 Para configurar o serviço DNS alterou-se o ficheiro /etc/resolv.conf, em cada uma das máquinas. Nesta experiência o conteúdo deste ficheiro foi alterado para:
 
 \begin{verbatim}
@@ -405,11 +405,12 @@ Para configurar o serviço DNS alterou-se o ficheiro /etc/resolv.conf, em cada u
 
 172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos. lixa.netlab.fe.up.pt, é o único elemento da lista de procura de hostnames.
 
-Existem três tipos de pacotes DNS: Queries, Responses e Updates. Os pacotes query e reponses(replies) têm um formato comum, para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. O pacote de update contém à semelhança dos outros um header com: uma identificação; flags; e, número de registo de recursos(RRs) para cada tipo da secção seguinte: zone entry; prerequisite resource records; update resource records; e, additional resource records.
 
 \subsubsection{Análise das capturas}
 
 É possível verificar a troca de pacotes DNS no início da ligação à Internet:
+Através dos logs, verificámos que existem dois tipos de pacotes DNS: Queries, Responses. Os pacotes query e reponses(replies) têm um formato comum. Para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. Não encontrámos nenhum pacote DNS do tipo update, no entanto a estrutura do pacote é idêntica.
+
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.95\textwidth]{exp5_dns.png}
