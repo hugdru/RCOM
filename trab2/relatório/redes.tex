@@ -42,7 +42,8 @@ e compreender/implementar/configurar uma rede de computadores. Ao longo deste
 relatório, serão descritos os aspetos fundamentais do referido trabalho,
 permitindo obter um conhecimento detalhado deste. Os ficheiros de análise
 usados para chegar às conclusões presentes ao longo do relatório encontram-se
-na pasta parte2 e o código da aplicação ftp na pasta parte1. Só não foram colocados os ficheiros da última experiência devido ao tamanho dos mesmos.
+na pasta parte2 e o código da aplicação ftp na pasta parte1. Só não foram
+colocados os ficheiros da última experiência devido ao tamanho dos mesmos.
 
 \section{Parte 1 - Desenvolvimento de uma aplicação de download}
 
@@ -53,19 +54,38 @@ na pasta parte2 e o código da aplicação ftp na pasta parte1. Só não foram c
 \end{figure}
 
 
-A aplicação consiste em três componentes: FTP, URL e download.
-O componente FTP é responsável pela comunicação com o servidor FTP usando Berkeley Sockets. As suas funções fornecem os meios para o estabelecimento das conexões TCP (controlo e dados), a terminação dessas conexões, e a transferência de dados. Este componente não tem visibilidade para nenhum dos outros componentes da aplicação.
-O componente URL é responsável por fazer parser do URL FTP passado para a aplicação como argumento na linha de comandos, retirando o host, path, user e password. Caso um, ou vários, destes parâmetros estejam em falta, URL também fornece os meios para os obter perguntando ao utilizador para os introduzir. Este componente também não tem visibilidade para nenhum dos outros componentes da aplicação.
-O componente download utilza os outros componentes para fazer o download do ficheiro.
+A aplicação consiste em três componentes: FTP, URL e download. O componente FTP
+é responsável pela comunicação com o servidor FTP usando Berkeley Sockets. As
+suas funções fornecem os meios para o estabelecimento das conexões TCP
+(controlo e dados), a terminação dessas conexões, e a transferência de dados.
+Este componente não tem visibilidade para nenhum dos outros componentes da
+aplicação. O componente URL é responsável por fazer parser do URL FTP passado
+para a aplicação como argumento na linha de comandos, retirando o host, path,
+user e password. Caso um, ou vários, destes parâmetros estejam em falta, URL
+também fornece os meios para os obter perguntando ao utilizador para os
+introduzir. Este componente também não tem visibilidade para nenhum dos outros
+componentes da aplicação. O componente download utilza os outros componentes
+para fazer o download do ficheiro.
 
 \subsubsection{Componente FTP}
-O componete FTP estabelece a ligação FTP na função ftp\_connect(), utilizando Berkeley Sockets para estabelecer as conexões TCP. O file descriptor data\_socket\_fd corresponde à conexão de dados e control\_socket\_fd à conexão de controlo.
+O componete FTP estabelece a ligação FTP na função ftp\_connect(), utilizando
+Berkeley Sockets para estabelecer as conexões TCP. O file descriptor
+data\_socket\_fd corresponde à conexão de dados e control\_socket\_fd à conexão
+de controlo.
 
 \subsubsection{Componente URL}
-Cada um das strings da estrutura URL correspondem a parâmetros necessários no estabelecimento da conexão FTP e no download do ficheiro e são retirados do URL recebido como argumento da linha de comandos ou inserida pelo utilizador. Caso o utilizador não tenha especificado a password no argumento da linha de comandos, então é pedida sem haver echo, não sendo mostrada no monitor e sendo uma alternativa mais segura para a introdução da password.
+Cada um das strings da estrutura URL correspondem a parâmetros necessários no
+estabelecimento da conexão FTP e no download do ficheiro e são retirados do URL
+recebido como argumento da linha de comandos ou inserida pelo utilizador. Caso
+o utilizador não tenha especificado a password no argumento da linha de
+comandos, então é pedida sem haver echo, não sendo mostrada no monitor e sendo
+uma alternativa mais segura para a introdução da password.
 
 \subsubsection{Successful Download}
-Foi testado a aplicação de download usando vários servidores FTP da FEUP, incluindo ftp.up.pt, pinguim.fe.up.pt e mirrors.fe.up.pt. Todos os download foram efetuados com sucesso, incluindo os testados na experiência 6 e na demostração da aplicação.
+Foi testado a aplicação de download usando vários servidores FTP da FEUP,
+incluindo ftp.up.pt, pinguim.fe.up.pt e mirrors.fe.up.pt. Todos os download
+foram efetuados com sucesso, incluindo os testados na experiência 6 e na
+demostração da aplicação.
 
 \section{Parte 2 - Configuração e Estudo de uma Rede}
 
@@ -78,7 +98,8 @@ Foi testado a aplicação de download usando vários servidores FTP da FEUP, inc
 \end{figure}
 
 \subsubsection{Objetivos}
-Tentar interligar dois computadores através de um switch. E entender o funcionamento do protocolo ARP e do comando ping.
+Tentar interligar dois computadores através de um switch. E entender o
+funcionamento do protocolo ARP e do comando ping.
 
 \subsubsection{Comandos principais de configuração}
 Foi dado reset aos equipamentos:
@@ -91,7 +112,8 @@ Switch,
     reload
 \end{verbatim}
 
-E ligados os cabos do tux1(eth0) e tux4(eth0) ao switch. E configurados os ips de cada uma dessas interfaces:
+E ligados os cabos do tux1(eth0) e tux4(eth0) ao switch. E configurados os ips
+de cada uma dessas interfaces:
 \begin{verbatim}
 Tux1,
     ifconfig eth0 172.16.50.1/24
@@ -108,11 +130,11 @@ arp -d ipaddress
 Uma vez que foram apagadas as linhas da arp table torna-se crucial investigar
 que máquina tem um dado ip. Tal é visível nos logs do wireshark, devido ao ping
 que fizemos para o tux4(ping 172.16.50.254). Do tux1 é feito um broadcast de
-uma trama do tipo ARP (Opcode) Request, que contém: o endereço IP do alvo; e a sua informação,
-ip e mac. Ficando à espera da resposta do alvo. Quando o tux4 capta esta
-mensagem, aceita-a porque tem o mesmo ip que o ip destino, e envia em unicast
-uma trama do tipo ARP Reply contendo o seu endereço MAC, juntamento com todos os outros
-dados.
+uma trama do tipo ARP (Opcode) Request, que contém: o endereço IP do alvo; e a
+sua informação, ip e mac. Ficando à espera da resposta do alvo. Quando o tux4
+capta esta mensagem, aceita-a porque tem o mesmo ip que o ip destino, e envia
+em unicast uma trama do tipo ARP Reply contendo o seu endereço MAC, juntamento
+com todos os outros dados.
 
 \begin{figure}[h]
     \centering
@@ -157,19 +179,24 @@ modo rápido.
 \end{figure}
 
 \subsubsection{Objetivos}
-Criação de duas LANs virtuais no switch, uma constituída pelo tuxy1 e tuxy4 e outro pelo tuxy2.
-Visto que se encontram em sub-redes diferentes, tuxy1 e tuxy4 não conseguem comunicar com tuxy2.
+Criação de duas LANs virtuais no switch, uma constituída pelo tuxy1 e tuxy4 e
+outro pelo tuxy2. Visto que se encontram em sub-redes diferentes, tuxy1 e tuxy4
+não conseguem comunicar com tuxy2.
 
 \subsubsection{Comandos principais de configuração}
-Para configurar o switch conectou-se a porta série de uma das máquinas com o switch e usou-se o programa gtkterm para inserir os comandos necessários.
-Para adicionar cada uma das vlans ao switch, entrou-se na consola de configuração e criou-se a vlan com o identificador x0 usando os comandos:
+Para configurar o switch conectou-se a porta série de uma das máquinas com o
+switch e usou-se o programa gtkterm para inserir os comandos necessários. Para
+adicionar cada uma das vlans ao switch, entrou-se na consola de configuração e
+criou-se a vlan com o identificador x0 usando os comandos:
 \begin{verbatim}
 configure terminal
 vlan x0
 end
 show vlan id x0
 \end{verbatim}
-Cada máquina foi ligada a uma porta do switch, configurou-se uma Fast Ethernet Interface para cada porta, e ligou-se as portas cujas máquinas tuxy1 e tuxy4 se conectaram à vlany0 e a porta da máquina tuxy2 à vlany1, usandos os comandos:
+Cada máquina foi ligada a uma porta do switch, configurou-se uma Fast Ethernet
+Interface para cada porta, e ligou-se as portas cujas máquinas tuxy1 e tuxy4 se
+conectaram à vlany0 e a porta da máquina tuxy2 à vlany1, usandos os comandos:
 \begin{verbatim}
 configure terminal
 interface fastEthernet 0/porta
@@ -195,11 +222,13 @@ echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
 \end{verbatim}
 
 \subsubsection{Análise das capturas}
-Foi executando um ping da máquina tuxy1 para a máquina tuxy4 o que foi possível visto que se encontram na mesma vlan, e o ping entre tux1 e tuxy2 não foi executado com sucesso, pois pertencem a vlans diferentes.
-Existem dois domínios de broadcast, devido a existir duas vlans (sem interligação entre elas).
-Através dos logs verificamos que quando fazemos broadcast no tuxy1 só o tuxy4 responde. E quando
-fazemos broadcast no tuxy2 nenhuma máquina responde, porque não chega nenhum pedido às
-outras máquinas.
+Foi executando um ping da máquina tuxy1 para a máquina tuxy4 o que foi possível
+visto que se encontram na mesma vlan, e o ping entre tux1 e tuxy2 não foi
+executado com sucesso, pois pertencem a vlans diferentes. Existem dois domínios
+de broadcast, devido a existir duas vlans (sem interligação entre elas).
+Através dos logs verificamos que quando fazemos broadcast no tuxy1 só o tuxy4
+responde. E quando fazemos broadcast no tuxy2 nenhuma máquina responde, porque
+não chega nenhum pedido às outras máquinas.
 
 \subsection{Experiência 3 - Configurar um Router em Linux}
 
@@ -210,12 +239,15 @@ outras máquinas.
 \end{figure}
 
 \subsubsection{Objetivos}
-Transformar a máquina tuxy4 num router, permitindo a comunicação entre as duas sub-redes criadas na experiência anterior.
+Transformar a máquina tuxy4 num router, permitindo a comunicação entre as duas
+sub-redes criadas na experiência anterior.
 
 \subsubsection{Comandos principais de configuração}
-Foi configurada a interface eth1 da máquina tuxy4 com IP 172.16.y1.253 e adicionada à vlan do tuxy2 (vlany1).
+Foi configurada a interface eth1 da máquina tuxy4 com IP 172.16.y1.253 e
+adicionada à vlan do tuxy2 (vlany1).
 
-Para que possa haver routing da parte do tuxy4 e para haver comunicação entre as sub-redes ativou-se o IP fowarding no tuxy4(router):
+Para que possa haver routing da parte do tuxy4 e para haver comunicação entre
+as sub-redes ativou-se o IP fowarding no tuxy4(router):
 \begin{verbatim}
 	echo 1 > /proc/sys/net/ipv4/ip_foward
 \end{verbatim}
@@ -232,8 +264,10 @@ Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 172.16.51.0 & 172.16.50.254 & 255.255.255.0 & UG & 0 & 0 & 0 & eth0
 \end{tabular} \\
 
-Esta entrada na routing table faz com que haja um redirecionamento dos ips to tipo 172.16.y1.0/24 para o gateway router
-172.16.y0.254(eth0 tuxy4). A primeira entrada da routing table tem o significado de aceitar o tráfego proveniente de 172.16.50.0/24.
+Esta entrada na routing table faz com que haja um redirecionamento dos ips to
+tipo 172.16.y1.0/24 para o gateway router 172.16.y0.254(eth0 tuxy4). A primeira
+entrada da routing table tem o significado de aceitar o tráfego proveniente de
+172.16.50.0/24.
 
 Faz-se o mesmo para o tuxy2, adicionando uma rota para a vlany0:
 \begin{verbatim}
@@ -247,9 +281,11 @@ Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 172.16.51.0 & 0.0.0.0 & 255.255.255.0 & Ui & 0 & 0 & 0 & eth0
 \end{tabular} \\
 
-Faz forward dos ips 172.16.y0.0/24 para gateway router 172.16.y1.253(eth1 tuxy4). Aceita os ips provenientes da rede 172.16.51.0/24.
+Faz forward dos ips 172.16.y0.0/24 para gateway router 172.16.y1.253(eth1
+tuxy4). Aceita os ips provenientes da rede 172.16.51.0/24.
 
-Tux4 funciona como um gateway router, pois redireciona de uma interface (eth0) para outra (eth1).
+Tux4 funciona como um gateway router, pois redireciona de uma interface (eth0)
+para outra (eth1).
 
 \begin{tabular}{l l l l l l l l}
 Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
@@ -257,10 +293,11 @@ Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 172.16.51.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth1
 \end{tabular} \\
 
-Aceita o tráfego proveniente destas redes e não envia para nenhum gateway visto que os clientes
-estão ligados diretamente, isto é, não há um decremento do ttl.
+Aceita o tráfego proveniente destas redes e não envia para nenhum gateway visto
+que os clientes estão ligados diretamente, isto é, não há um decremento do ttl.
 
-Para que os pacotes echos ICMP enviados em broadcasts não sejam automaticamente ignorados, é usado o seguinte comando:
+Para que os pacotes echos ICMP enviados em broadcasts não sejam automaticamente
+ignorados, é usado o seguinte comando:
 \begin{verbatim}
 	echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
 \end{verbatim}
@@ -274,9 +311,22 @@ HWaddr 00:21:5a:61:2f:d6, é o mac address da interface eth0(172.16.51.1) do tux
 \end{verbatim}
 
 \subsubsection{Análise das capturas}
-Pode-se observar nos logs que naturalmente depois da configurações referidas é possível fazer ping do tuxy1 para todas as outras interfaces.
-Após limpar as ARP tables das três máquinas fez-se ping do tuxy1 para o tuxy2, e é possível observar nos logs que uma vez que a ethernet usa MAC addresses e a ARP table foi limpa, o tuxy1 precisa de saber qual o mac address da interface eth0 do tuxy4, o tuxy4 precisa de saber o mac do tuxy2, o tuxy2 o mac do eth1 tuxy4, e o tuxy4 o mac do tuxy1. Tuxy1 envia um ARP request para obter o MAC address de eth0 tuxy4 e tuxy2 envia um ARP request a eth1 tuxy4.
-É possível observar que os pacotes ICMP echo, request(tipo 8) e reply(tipo 0) presentes nos logs, são reencaminhados para o tuxy4. Estes são visíveis pelo tuxy4, em ambas as interfaces. Acontece uma coisa um pouco estranha que é o facto do tux3 parecer estar a fazer reply sem antes saber o mac do tux4 eth1 (através dos logs do wireshark). Só depois de algum tempo é que se vê o broadcast ARP a partir do tux3. Pensamos que isto é devido ao tux3 ter respondido ao broadcast do tux4, e de ter ficado de modo implícito com o mac do tux4 eth1 em cache, sendo só depois feito o pedido formal. O mesmo acontece do tux4 para o tux1.
+Pode-se observar nos logs que naturalmente depois da configurações referidas é
+possível fazer ping do tuxy1 para todas as outras interfaces. Após limpar as
+ARP tables das três máquinas fez-se ping do tuxy1 para o tuxy2, e é possível
+observar nos logs que uma vez que a ethernet usa MAC addresses e a ARP table
+foi limpa, o tuxy1 precisa de saber qual o mac address da interface eth0 do
+tuxy4, o tuxy4 precisa de saber o mac do tuxy2, o tuxy2 o mac do eth1 tuxy4, e
+o tuxy4 o mac do tuxy1. Tuxy1 envia um ARP request para obter o MAC address de
+eth0 tuxy4 e tuxy2 envia um ARP request a eth1 tuxy4. É possível observar que
+os pacotes ICMP echo, request(tipo 8) e reply(tipo 0) presentes nos logs, são
+reencaminhados para o tuxy4. Estes são visíveis pelo tuxy4, em ambas as
+interfaces. Acontece uma coisa um pouco estranha que é o facto do tux3 parecer
+estar a fazer reply sem antes saber o mac do tux4 eth1 (através dos logs do
+wireshark). Só depois de algum tempo é que se vê o broadcast ARP a partir do
+tux3. Pensamos que isto é devido ao tux3 ter respondido ao broadcast do tux4, e
+de ter ficado de modo implícito com o mac do tux4 eth1 em cache, sendo só
+depois feito o pedido formal. O mesmo acontece do tux4 para o tux1.
 
 \begin{figure}[h]
     \centering
@@ -322,7 +372,8 @@ tux4,
     route add default gw 172.16.51.254
 \end{verbatim}
 
-Criar as vlans como anteriormente demonstrado. E permitir o redirecionamento de pacotes no tux4:
+Criar as vlans como anteriormente demonstrado. E permitir o redirecionamento de
+pacotes no tux4:
 \begin{verbatim}
 echo 1 > /proc/sys/net/ipv4/ip_forward
 \end{verbatim}
@@ -393,23 +444,35 @@ um processo em modo listening associado a essa porta.
 \subsection{Experiência 5 - DNS}
 
 \subsubsection{Objetivos}
-Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à Internet através da rede previamente criada. A arquitetura da rede continuou igual à da experiência anterior.
+Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à
+Internet através da rede previamente criada. A arquitetura da rede continuou
+igual à da experiência anterior.
 
 \subsubsection{Comandos principais de configuração}
-Para configurar o serviço DNS alterou-se o ficheiro /etc/resolv.conf, em cada uma das máquinas. Nesta experiência o conteúdo deste ficheiro foi alterado para:
+Para configurar o serviço DNS alterou-se o ficheiro /etc/resolv.conf, em cada
+uma das máquinas. Nesta experiência o conteúdo deste ficheiro foi alterado
+para:
 
 \begin{verbatim}
 	search lixa.netlab.fe.up.pt
 	nameserver 172.16.1.1
 \end{verbatim}
 
-172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos. lixa.netlab.fe.up.pt, é o único elemento da lista de procura de hostnames.
+172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos.
+lixa.netlab.fe.up.pt, é o único elemento da lista de procura de hostnames.
 
 
 \subsubsection{Análise das capturas}
 
 É possível verificar a troca de pacotes DNS no início da ligação à Internet:
-Através dos logs, verificámos que existem dois tipos de pacotes DNS: Queries, Responses. Os pacotes query e reponses(replies) têm um formato comum. Para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. Não encontrámos nenhum pacote DNS do tipo update, no entanto a estrutura do pacote é idêntica.
+Através dos logs, verificámos que existem dois tipos de pacotes DNS: Queries,
+Responses. Os pacotes query e reponses(replies) têm um formato comum. Para além
+dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de
+respostas de RRs; número de registos de servidores authoritative; e, número
+adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS,
+CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de
+servidores authoritative; e, informação adicional útil. Não encontrámos nenhum
+pacote DNS do tipo update, no entanto a estrutura do pacote é idêntica.
 
 \begin{figure}[h]
     \centering
@@ -435,54 +498,81 @@ Response:
 \end{figure}
 
 \subsubsection{Objetivos}
-Estudo das ligações TCP de dados e controlo e as suas fases; estudo das ligações FTP; Estudo do mecanismo TCP ARQ e mecanismo de controlo de congestionamento TCP.
-
-Foi compilada a aplicação de download desenvolvida e descrita na parte 1 do presente relatório e usada para o download de um ficheiro presente num servidor FTP. O download foi concluído com sucesso, e logs analisados.
-
-São abertas duas conexões TCP pela aplicação FTP, uma de controlo e outra de dados. Primeiramente a aplicação cria uma conexão TCP de controlo que conecta um porto sem privilégios (porto > 1023) ao porto FTP do servidor (porto 21) que vai continuar aberta durante a transferência. Foi utilizado nesta aplicação o modo passivo por oposição ao modo activo. No modo activo o cliente envia o número do porto sem privilégios para o servidor se conectar. Por outro lado, no modo passivo, é o servidor que envia o número de uma das suas portas sem privilégios para que o cliente se conecte.
-
-A informação de controlo FTP é transportada na conexão de controlo, para além das mensagens de acknowledgement(ACK).
+Estudo das ligações TCP de dados e controlo e as suas fases; estudo das
+ligações FTP; Estudo do mecanismo TCP ARQ e mecanismo de controlo de
+congestionamento TCP.
 
 \subsubsection{Comandos principais de configuração}
+Foi compilada a aplicação de download desenvolvida e descrita na parte 1 do
+presente relatório e usada para o download de um ficheiro presente num servidor
+FTP. O download foi concluído com sucesso, e os logs foram analisados.
+
+São abertas duas conexões TCP pela aplicação FTP, uma de controlo e outra de
+dados. Primeiramente a aplicação cria uma conexão TCP de controlo numa porta
+sem privilégios (porta > 1023) que conecta à porta FTP do servidor (porta 21)
+que vai continuar aberta durante a transferência. Foi utilizado nesta aplicação
+o modo passivo por oposição ao modo activo. No modo activo o cliente envia o
+numero da porta(de dados) sem privilégios para que o servidor(porta 20) se
+ligue. Por outro lado, no modo passivo, é o servidor que envia o número de uma
+das suas portas sem privilégios(> 1023) para que o cliente se conecte(porta cmd
+cliente + 1 = porta dados).
 
 \subsubsection{Análise das capturas}
 
-\subsection{Experiência 6}
+Verificámos que a informação de controlo FTP é transportada na conexão de
+controlo que liga uma porta aleatória(> 1023) do cliente à porta 21 do
+servidor.
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.45]{exp6_control.png}
+    \caption{Exemplo de informação de controlo FTP}
+\end{figure}
 
-\subsubsection{How many TCP connections are opened by your ftp application?}
+No nosso caso o cliente tem a porta de controlo 50638. E o servidor ftp a porta 21.
 
-São abertas duas conexões TCP pela aplicação FTP, uma de controlo e outra de dados.
-Primeiramente a aplicação cria uma conexão TCP de controlo que conecta um porto sem privilégios (porto > 1023) ao porto FTP do servidor (porto 21) que vai continuar aberta durante a transferência.
-Foi utilizado nesta aplicação o modo passivo por oposição ao modo activo, sendo o cliente a abrir a conexão TCP de dados.
-No modo activo o cliente envia para o servidor um número de porto aleatório e sem privilégios, para se conectar e é o próprio servidor a abrir a conexão TCP de dados, ligando a porto do cliente recebido e o seu porto 20.
-No modo passivo o servidor envia para o cliente um número de porto aleatório e sem privilégios, e é o cliente que abre a conexão TCP de dados.
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.60]{exp6_controlPorts.png}
+    \caption{Portas e IPs de controlo cliente -> servidor modo passivo}
+\end{figure}
 
-\subsubsection{In what connection is transported the FTP control information?}
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.60]{exp6_controlPortsReceiving.png}
+    \caption{Portas e IPs de controlo servidor -> cliente modo passivo}
+\end{figure}
 
-A informação de controlo FTP é transportada na conexão de controlo que liga um porto aleatótio do cliente e o porto 21 do servidor. É também transportado as mensagens de acknowledgement (ACK).
+Concluímos também que as três fases de conexão TCP são: connection
+estabelishment, data transfer e connection termination. Na parte da connection
+establishment o cliente manda um SYN para o servidor; recebe uma reposta
+SYN-ACK; e, finalmente o cliente manda um ACK. Como se pode verificar na
+primeira imagem desta secção. Para além disso o receptor não faz request de
+retransmissão de pacotes perdidos. O transmissor espera pelo ACK e quando não o
+recebe, reenvia os pacotes após um certo intervalo. Pode ser implementado de
+várias formas (Stop-and-wait, Go-Back-N, Selective Repeat). O TCP header contém
+campos como a porta fonte e a porta do destinatário, o número de sequência, o
+número de acknowledgement e o tamanho da window. É atribuído um número de
+sequência a cada byte de dados, sendo que o número de sequência do TCP header é
+o do primeiro byte de dados desse pacote. O número de acknowledge indica o
+número de sequência que o receptor espera do emissor e o tamanho da window
+indica o número de bytes que o receptor está disposto a receber. Existem vários
+mecanismos de controlo de congestionamento TCP. Cada um deles possui algoritmos
+de controlo de congestionamento juntamento com outras abordagens. Por exemplo:
+Slow start; Congestion avoidance; Fast retransmit; Fast Recovery; etc. Exemplos
+de mecanismos que usam alguns destes algoritmos: TCP Tahoe; TCP Newreno; TCP
+Vegas; etc. Este mecanismo pode ser observado em
+/proc/sys/net/ipv4/tcp\_congestion\_control. Embora não tenhamos visto qual
+deles está a ser usado nos pcs das labs sabe-se que este implementa o algoritmo
+Slow start visto que o throughput evolui até um determinado ponto e diminui
+quando há congestionamento. Evidenciado através da existência de outra conexão
+TCP.
 
-\subsubsection{What are the phases of a TCP connection?}
-
-As três fases duma conexão TCP são: connection estabelishment, data transfer e connection termination.
-
-\subsubsection{How does the ARQ TCP mechanism work? What are the relevant TCP
-fields? What relevant information can be observed in the logs?}
-
-O receptor não faz request de retransmissão de pacotes perdidos. O transmissor espera pelo ACK e quando
-não o recebe, reenvia os pacotes após um certo intervalo. Pode ser implementado de várias formas (Stop-and-wait, Go-Back-N,
-Selective Repeat).
-O TCP header contém campos como o porto da fonte e o porto do destinatário, o número de sequência, o número de acknowledgement e
-o tamanho da window.
-É atribuido um número de sequência a cada byte de dados, sendo que o número de sequência do TCP header é o do primeiro byte de dados desse pacote. O número de acknowledge indica o número de sequência que o receptor espera do emissor e o tamanho da window indica o número de bytes que o receptor está disposto a receber.
-
-\subsubsection{How does the TCP congestion control mechanism work? What are the
-relevant fields. How did the throughput of the data connection evolve
-along the time? Is it according to the TCP congestion control mechanism?}
-Existem vários mecanismos de controlo de congestionamento TCP. Cada um deles possui algoritmos de controlo de congestionamento juntamento com outras abordagens. Por exemplo: Slow start; Congestion avoidance; Fast retransmit; Fast Recovery; etc. Exemplos de mecanismos que usam alguns destes algoritmos: TCP Tahoe; TCP Newreno; TCP Vegas; etc. Slow start, funciona através de acknowledgements e duas janelas, uma no receptor e outra no emissor estando o emissor dependente destas. Congestion avoidance, um timer de retransmissão, recepção de duplicados e a alerta desta situação ao emissor. Fast retransmit, maneira estratégica de lidar com ACKs duplicados de maneira a não haver esperas. O throughput evolui até um determinado ponto e diminui quando há congestionamento e depois retoma. Consequência do mecanismo exibir um cariz Slow start. O mecanismo pode ser observado em /proc/sys/net/ipv4/tcp\_congestion\_control.
-
-\subsubsection{Is the throughput of a TCP data connections disturbed by the appearance of a second TCP connection? How?}
-Sim existe conflitos devido à existência de outra conexão TCP. Isto pode ser verificado através das linhas pretas no wireshark que indicam erros de ZeroWindow, ACKed unseen segment, Fast Retransmission, TCP Previous segment not captured, etc.
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale=0.60]{exp6_conflicts.png}
+    \caption{Congestionamento TCP}
+\end{figure}
 
 \section{Conclusões}
 %síntese da informação apresentada nas secções anteriores; reflexão sobre os
@@ -493,10 +583,11 @@ componentes de uma rede de computadores. O projecto  desenvolvido resultou numa
 aplicação capaz de fazer o download de ficheiros via ftp em modo passivo, com
 ou sem autenticação. E numa rede atual funcional. O trabalho foi realizado com
 sucesso e com grande entusiasmo, visto que, compreendemos a maneira como o
-protocolo ftp funciona, como implementá-lo, e como criar a nossa própria rede de
-computadores. A partir dos logs guardados durante as experiências podemos inspecionar
-os pacotes transferidos, e adquirir um conhecimento mais aprofundado e mais prático dos protocolos,
-FTP, TCP, ICMP, e LOOP. Este trabalho permitiu consolidar a matéria dada durante o semestre na cadeira
-de Redes de Computadores. Goodbye MEO router, welcome openwrt :).
+protocolo ftp funciona, como implementá-lo, e como criar a nossa própria rede
+de computadores. A partir dos logs guardados durante as experiências podemos
+inspecionar os pacotes transferidos, e adquirir um conhecimento mais
+aprofundado e mais prático dos protocolos, FTP, TCP, ICMP, e LOOP. Este
+trabalho permitiu consolidar a matéria dada durante o semestre na cadeira de
+Redes de Computadores. Goodbye MEO router, welcome openwrt :).
 
 \end{document}
