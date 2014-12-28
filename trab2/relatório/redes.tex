@@ -137,6 +137,12 @@ simulações de redes; etc. De modo rápido.
 
 \subsection{Experiência 2}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.70\textwidth]{ArquitecturaNasExperiencias/exp2.png}
+    \caption{Arquitetura da experiência 2}
+\end{figure}
+
 \subsubsection{Objetivos}
 Criação de duas LANs virtuais no switch, uma constituída pelo tuxy1 e tuxy4 e outro pelo tuxy2.
 Visto que se encontram em sub-redes diferentes, tuxy1 e tuxy4 não conseguem comunicar com tuxy2.
@@ -222,14 +228,71 @@ why?
 Os endereços do Network Layer presentes no protocolo IP são os ips de destino e fonte. E os endereços do Data Link Layer necessários para o protocolo Ethernet II são os macs de destino e fonte, sendo estes dependentes das máquinas por onde passam. É necessário haver estes dois tipos de endereços porque é necessário saber de que máquina veio a mensagem(de forma unívoca) mas também o ip fonte de origem; do mesmo modo para o destino. E também porque os protocolos assim o dizem.
 \subsection{Experiência 4}
 
-\subsubsection{How to configure a static route in a commercial router?}
-É feito de modo semelhante ao que se faz nas máquinas que correm linux.\\
+\subsubsection{Objetivos}
+Configurar um router comercial configurado com NAT de modo a termos accesso à
+internet através da topologia da rede criada.
 
-\noindent Cria um default gateway,\\
-ip route 0.0.0.0 0.0.0.0 172.16.1.254\\
+\subsubsection{Comandos principais de configuração}
 
-\noindent Faz um redirecionamento,\\
+Dar reset aos computadores e ao switch através dos comandos já apresentados.\\
+
+Dar reset ao router através do seguinte comando:
+\begin{verbatim}
+    copy flash:tux5-clean startup-config
+    reload
+\end{verbatim}
+
+Configurar cada pc com o ip correcto:
+\begin{verbatim}
+tux1,
+    ifconfig eth0 172.16.50.1/24
+tux2,
+    ifconfig eth0 172.16.51.1/24
+tux4,
+    ifconfig eth0 172.16.50.254/24
+    ifconfig eth1 172.16.51.253/24
+\end{verbatim}
+
+Configurar as routes para os pcs:
+\begin{verbatim}
+tux1,
+    route add default gw 172.16.50.254
+tux2,
+    route add default gw 172.16.51.254
+    route add -net 172.16.50.0/24 gw 172.16.51.253
+tux4,
+    route add default gw 172.16.51.254
+\end{verbatim}
+
+Criar as vlans como anteriormente demonstrado.\\
+
+Configurar o router com nat:
+\begin{verbatim}
+conf t
+interface gigabitethernet 0/0
+ip address 172.16.51.254 255.255.255.0
+no shutdown
+ip nat inside # Interface do lado lan
+exit
+interface gigabitethernet 0/1
+ip address 172.16.1.59 255.255.255.0
+no shutdown
+ip nat outside # Interface do lado “wan”
+exit
+ip nat pool ovrld 172.16.1.59 172.16.1.59 prefix 24
+ip nat inside source list 1 pool ovrld overload
+# Esta permissão não deixa que o tux4 tenha acesso à net
+# 0.0.0.255 para as permissões serem iguais para os hosts
+access-list 1 permit 172.16.50.0 0.0.0.7
+access-list 1 permit 172.16.51.0 0.0.0.7
+# Default gateway do router com nat
+ip route 0.0.0.0 0.0.0.0 172.16.1.254
+# Para falar com os hosts do outro lado do router
 ip route 172.16.50.0 255.255.255.0 172.16.51.253
+end
+\end{verbatim}
+
+\subsubsection{Análise das capturas}
 
 \subsubsection{What are the paths followed by the packets in the experiments carried out}
 and why?
@@ -278,34 +341,6 @@ Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 \noindent Router Cisco,\\
 ip route 0.0.0.0 0.0.0.0 172.16.1.254\\
 ip route 172.16.50.0 255.255.255.0 172.16.51.253
-
-\subsubsection{How to configure NAT in a commercial router?}
-Usamos o template presente no guião de modo a fazer esta configuração.
-
-\begin{verbatim}
-conf t
-interface gigabitethernet 0/0
-ip address 172.16.51.254 255.255.255.0
-no shutdown
-ip nat inside # Interface do lado lan
-exit
-interface gigabitethernet 0/1
-ip address 172.16.1.59 255.255.255.0
-no shutdown
-ip nat outside # Interface do lado “wan”
-exit
-ip nat pool ovrld 172.16.1.59 172.16.1.59 prefix 24
-ip nat inside source list 1 pool ovrld overload
-# Esta permissão não deixa que o tux4 tenha acesso à net
-# 0.0.0.255 para as permissões serem iguais para os hosts
-access-list 1 permit 172.16.50.0 0.0.0.7
-access-list 1 permit 172.16.51.0 0.0.0.7
-# Default gateway do router com nat
-ip route 0.0.0.0 0.0.0.0 172.16.1.254
-# Para falar com os hosts do outro lado do router
-ip route 172.16.50.0 255.255.255.0 172.16.51.253
-end
-\end{verbatim}
 
 \subsubsection{What does NAT do?}
 Esta técnica permite que se possa utilizar os mesmos ips em diferentes redes, chamadas redes privadas(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Isto é possível porque os ips privados são traduzidos para um público. Este mapeamento é feito através de uma tabela chamada tabela de tradução de endereços de rede, que possibilita que o router saiba para que hosts são destinados certos pacotes vindos da internet. Cada entrada da tabela tem uma parte para o lado WAN e outra para o lado LAN, cada um deles tem dois campos: um para o ip e a outra para a porta. A porta é o que permite fazer a distinção entre destinos de pacotes. É possível reencaminhar todos os pacotes wan com destino a uma dada porta (por exemplo, porta default para o server http, 80) para uma dada porta de um host, que terá um processo em modo listening associado a essa porta.
