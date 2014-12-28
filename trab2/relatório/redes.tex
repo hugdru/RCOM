@@ -69,12 +69,6 @@ Foi testado a aplicação de download usando vários servidores FTP da FEUP, inc
 
 \section{Parte 2}
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.55\textwidth]{ArquitecturaNasExperiencias/exp6.png}
-    \caption{Topologia da rede}
-\end{figure}
-
 \subsection{Experiência 1}
 
 \begin{figure}[h]
@@ -181,51 +175,80 @@ outras máquinas.
 
 \subsection{Experiência 3}
 
-\subsubsection{What routes are there in the tuxes? What are their meaning?}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.50\textwidth]{ArquitecturaNasExperiencias/exp3.png}
+    \caption{Arquitetura da experiência 3}
+\end{figure}
 
-No tux1 existem duas rotas.\\
+\subsubsection{Objetivos}
+Transformar a máquina tuxy4 num router, permitindo a comunicação entre as duas sub-redes criadas na experiência anterior.
+
+Foi configurada a interface eth1 da máquina tuxy4 com IP 172.16.y1.253 e adicionada à vlan do tuxy2 (vlany1).
+
+Para que possa haver routing da parte do tuxy4 e para haver comunicação entre as sub-redes ativou-se o IP fowarding no tuxy4(router):
+\begin{verbatim}
+	echo 1 > /proc/sys/net/ipv4/ip_foward
+\end{verbatim}
+
+No tuxy1 foi adicionada uma rota para a vlany1:
+\begin{verbatim}
+	route add –net 172.16.y1.0/24 gw 172.16.y0.254
+	route -n
+\end{verbatim}
+
 \begin{tabular}{l l l l l l l l}
 Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 172.16.50.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth0 \\
 172.16.51.0 & 172.16.50.254 & 255.255.255.0 & UG & 0 & 0 & 0 & eth0
-\end{tabular}\\
-A primeira tem o significado de aceitar o tráfego proveniente de 172.16.50.0/24. A outra faz com que haja um redirecionamento dos ips to tipo 172.16.51.0/24 para o gateway router 172.16.50.254(eth0 tux4).\\
+\end{tabular} \\
 
-\noindent No tux2 existem duas rotas e a tabela é semelhante à do tux1.\\
+Esta entrada na routing table faz com que haja um redirecionamento dos ips to tipo 172.16.y1.0/24 para o gateway router
+172.16.y0.254(eth0 tuxy4). A primeira entrada da routing table tem o significado de aceitar o tráfego proveniente de 172.16.50.0/24.
+
+Faz-se o mesmo para o tuxy2, adicionando uma rota para a vlany0:
+\begin{verbatim}
+	route add –net 172.16.y0.0/24 gw 172.16.y1.253
+	route -n
+\end{verbatim}
+
 \begin{tabular}{l l l l l l l l}
 Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 172.16.50.0 & 172.16.51.253 & 255.255.255.0 & UG & 0 & 0 & 0 & eth0 \\
 172.16.51.0 & 0.0.0.0 & 255.255.255.0 & Ui & 0 & 0 & 0 & eth0
-\end{tabular}\\
-Aceita os ips provenientes da rede 172.16.51.0/24. E faz forward dos ips 172.16.50.0/24 para o gateway router 172.16.51.253(eth1 tux4).\\
+\end{tabular} \\
 
-\noindent I tux4 funciona como um gateway router, porque redireciona de uma interface (eth0) para outra (eth1).\\
+Faz forward dos ips 172.16.y0.0/24 para gateway router 172.16.y1.253(eth1 tuxy4). Aceita os ips provenientes da rede 172.16.51.0/24.
+
+Tux4 funciona como um gateway router, pois redireciona de uma interface (eth0) para outra (eth1).
+
 \begin{tabular}{l l l l l l l l}
 Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
 172.16.50.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth0 \\
 172.16.51.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth1
-\end{tabular}\\
-Aceita o tráfego proveniente destas redes e não manda para nenhum gateway visto que os clientes estão ligados diretamente, isto é, não há um decremento do ttl.
+\end{tabular} \\
 
-\subsubsection{What information does an entry of the forwarding table contain?}
-Uma vez que a nossa routing table só tem static routes a forwarding table irá resultar nas mesmas routes. Porque não é feita uma descoberta da rede, através de routing protocols para construir a routing table, e aplicado o algoritmo de Dijkstra para só depois construir a forwarding table, com o resultado desse processo. Uma forwaring table contém os seguintes campos: Destination; Gateway; Genmask; Flags; Metric; Ref; Use; e, Iface.
+Aceita o tráfego proveniente destas redes e não envia para nenhum gateway visto que os clientes
+estão ligados diretamente, isto é, não há um decremento do ttl.
 
-\subsubsection{What ARP messages, and associated MAC addresses, are observed and}
-why?
+Para que os pacotes echos ICMP enviados em broadcasts não sejam automaticamente ignorados, é usado o seguinte comando:
+\begin{verbatim}
+	echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+\end{verbatim}
 
-Uma vez que a ethernet usa MAC addresses e a ARP table foi limpa, é necessário saber descobrir qual o mac address para um determinado IP. Que é a função do protocolo ARP. O tux1 vai precisar de saber qual o mac address da interface eth0 do tux4, o tux4 vai precisar de saber qual o mac do tux3, o tux3 o mac do eth1 tux4, e o tux4 o mac do tux1. Uma fez descoberto o mac address, o mesmo, é escrito na trama. Protocolo simplificado, pedido -> broadcast ARP com ip alvo e ip de retorno; reply -> ip alvo com mac address.\\\newline
-
-\noindent HWaddr 00:21:5a:c3:78:70, é o mac address da interface eth0(172.16.50.254) do tux4.\\
-HWaddr 00:c0:df:08:d5:b0, é o mac address da interface eth1(172.16.51.253) do tux4.\\
-HWaddr 00:0f:fe:8b:e4:a7, é o mac address da interface eth0(172.16.50.1) do tux1.\\
+MAC addresses observadas:
+\begin{verbatim}
+HWaddr 00:21:5a:c3:78:70, é o mac address da interface eth0(172.16.50.254) do tux4.
+HWaddr 00:c0:df:08:d5:b0, é o mac address da interface eth1(172.16.51.253) do tux4.
+HWaddr 00:0f:fe:8b:e4:a7, é o mac address da interface eth0(172.16.50.1) do tux1.
 HWaddr 00:21:5a:61:2f:d6, é o mac address da interface eth0(172.16.51.1) do tux2.
+\end{verbatim}
 
-\subsubsection{What ICMP packets are observed and why?}
-São observados pacotes ICMP de request(tipo 8) e reply(tipo 0). Porque foi usado o comando ping que trata de fazer os pedidos e que espera por uma reposta. Acontece uma coisa um pouco estranha que é o facto do tux3 parecer estar a fazer reply sem antes saber o mac do tux4 eth1 (através dos logs do wireshark). Só depois de algum tempo é que se vê o broadcast ARP a partir do tux3. Pensamos que isto é devido ao tux3 ter respondido ao broadcast do tux4, e de ter ficado de modo implícito com o mac do tux4 eth1 em cache, sendo só depois feito o pedido formal. O mesmo acontece do tux4 para o tux1.
+\subsubsection{Análise das capturas}
+Pode-se observar nos logs que naturalmente depois da configurações referidas é possível fazer ping do tuxy1 para todas as outras interfaces.
+Após limpar as ARP tables das três máquinas fez-se ping do tuxy1 para o tuxy2, e é possível observar nos logs que uma vez que a ethernet usa MAC addresses e a ARP table foi limpa, o tuxy1 precisa de saber qual o mac address da interface eth0 do tuxy4, o tuxy4 precisa de saber o mac do tuxy2, o tuxy2 o mac do eth1 tuxy4, e o tuxy4 o mac do tuxy1. Tuxy1 envia um ARP request para obter o MAC address de eth0 tuxy4 e tuxy2 envia um ARP request a eth1 tuxy4.
+É possível observar também que porque os pacotes echo, pacotes ICMP presentes nos logs, são reencaminhados para o tuxy4, eles são visíveis pelo tuxy4, em ambas as interfaces.
 
-\subsubsection{What are the IP and MAC addresses associated to ICMP packets and}
-why?
-Os endereços do Network Layer presentes no protocolo IP são os ips de destino e fonte. E os endereços do Data Link Layer necessários para o protocolo Ethernet II são os macs de destino e fonte, sendo estes dependentes das máquinas por onde passam. É necessário haver estes dois tipos de endereços porque é necessário saber de que máquina veio a mensagem(de forma unívoca) mas também o ip fonte de origem; do mesmo modo para o destino. E também porque os protocolos assim o dizem.
 \subsection{Experiência 4}
 
 \subsubsection{Objetivos}
@@ -344,24 +367,43 @@ ip route 172.16.50.0 255.255.255.0 172.16.51.253
 
 \subsubsection{What does NAT do?}
 Esta técnica permite que se possa utilizar os mesmos ips em diferentes redes, chamadas redes privadas(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Isto é possível porque os ips privados são traduzidos para um público. Este mapeamento é feito através de uma tabela chamada tabela de tradução de endereços de rede, que possibilita que o router saiba para que hosts são destinados certos pacotes vindos da internet. Cada entrada da tabela tem uma parte para o lado WAN e outra para o lado LAN, cada um deles tem dois campos: um para o ip e a outra para a porta. A porta é o que permite fazer a distinção entre destinos de pacotes. É possível reencaminhar todos os pacotes wan com destino a uma dada porta (por exemplo, porta default para o server http, 80) para uma dada porta de um host, que terá um processo em modo listening associado a essa porta.
+
 \subsection{Experiência 5}
 
-\subsubsection{How to configure the DNS service at an host?}
+\subsubsection{Objetivos}
+Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à Internet através da rede previamente criada.
 
-Para configurar o serviço DNS alterou-se o ficheiro resolv.conf localizado no diretório /etc do host.
-Nesta experiência o conteúdo deste ficheiro foi alterado para:
+A arquitetura da rede continuou igual à da experiência anterior.
+
+Para configurar o serviço DNS alterou-se o ficheiro /etc/resolv.conf, em cada uma das máquinas. Nesta experiência o conteúdo deste ficheiro foi alterado para:
 
 \begin{verbatim}
-search lixa.netlab.fe.up.pt
-nameserver 172.16.1.1
+	search lixa.netlab.fe.up.pt
+	nameserver 172.16.1.1
 \end{verbatim}
 
-\noindent 172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos.
-lixa.netlab.fe.up.pt, é o única elemento da lista de procura de hostnames.
+172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos. lixa.netlab.fe.up.pt, é o único elemento da lista de procura de hostnames.
 
-\subsubsection{What packets are exchanged by DNS and what information is transported?}
+Existem três tipos de pacotes DNS: Queries, Responses e Updates. Os pacotes query e reponses(replies) têm um formato comum, para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. O pacote de update contém à semelhança dos outros um header com: uma identificação; flags; e, número de registo de recursos(RRs) para cada tipo da secção seguinte: zone entry; prerequisite resource records; update resource records; e, additional resource records.
 
-Existem três tipos de DNS packets: Queries, Responses e Updates. Os pacotes de DNS queries e reponses(replies) têm um formato comum, para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. O pacote de update contém à semelhança dos outros um header com: uma identificação; flags; e, número de registo de recursos(RRs) para cada tipo da secção seguinte: zone entry; prerequisite resource records; update resource records; e, additional resource records.
+\subsubsection{Análise das capturas}
+
+É possível verificar a troca de pacotes DNS no início da ligação à Internet:
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{exp5_dns.png}
+    \caption{Pacotes DNS - Query e Response}
+\end{figure}
+
+Query:
+\begin{verbatim}
+	ftp.up.pt: type A, class IN
+\end{verbatim}
+Response:
+\begin{verbatim}
+	ftp.up.pt: type A, class IN, addr 193.136.37.8, Time to live: 3616, Data length: 4
+\end{verbatim}
+
 \subsection{Experiência 6}
 
 \subsubsection{How many TCP connections are opened by your ftp application?}
