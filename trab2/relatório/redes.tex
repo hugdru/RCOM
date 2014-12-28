@@ -287,9 +287,12 @@ tux4,
     route add default gw 172.16.51.254
 \end{verbatim}
 
-Criar as vlans como anteriormente demonstrado.\\
+Criar as vlans como anteriormente demonstrado. E permitir o redirecionamento de pacotes no tux4:
+\begin{verbatim}
+echo 1 > /proc/sys/net/ipv4/ip_forward
+\end{verbatim}
 
-Configurar o router com nat:
+Configurar o router cisco com nat:
 \begin{verbatim}
 conf t
 interface gigabitethernet 0/0
@@ -316,57 +319,41 @@ end
 \end{verbatim}
 
 \subsubsection{Análise das capturas}
+Na primeira captura do wireshark observamos que são descobertos os mac adresses
+através do protocolo layer 2, ARP. Ao remover a route 172.16.y0.0/24 via tux4
+do tux2, observámos que o pacote Echo Reply passa pelo router cisco, que por
+sua vez redireciona para o router linux(tux4), chegando por fim ao tux1 por
+forwarding do tux4. A introdução dessa route previne passar pelo router cisco,
+aumentando assim a velocidade da conexão. Esta diferença deve-se ao algoritmo
+das forwarding tables e das entradas presentes em cada máquina. Verificou-se
+também que, quando o nat não está implementado é possível fazer pedidos para
+fora da nossa rede, só que a resposta nunca chega.
 
-\subsubsection{What are the paths followed by the packets in the experiments carried out}
-and why?
-Através do algoritmo das forwarding tables(escolha de linhas) e das entradas presentes em cada máquina. Acontece o seguinte:
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{exp4_whynat.png}
+    \caption{Não há resposta sem NAT}
+\end{figure}
 
-\noindent Tux1 -> net,\\
-172.16.50.1(tux1,eth0) -> 172.16.50.254(tux4, eth0) -> 172.16.51.254(routerCisco, eth0) -> 172.16.1.254(routerCisco, eth1)\\
+Isto, deve-se ao facto do router cisco não saber para que host enviar uma dada
+trama. Daí ser necessário a funcionalidade NAT. Como constatámos, esta técnica
+permite utilizar os mesmos ips em diferentes redes, chamadas redes
+privadas(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Isto é possível porque os
+ips privados são traduzidos para um público. Este mapeamento é feito através de
+uma tabela chamada tabela de tradução de endereços de rede, que possibilita que
+o router saiba para que hosts são destinados certos pacotes vindos da internet.
+Cada entrada da tabela tem uma parte para o lado WAN e outra para o lado LAN,
+cada um deles tem dois campos: um para o ip e a outra para a porta. A porta é o
+que permite fazer a distinção entre destinos de pacotes. É possível
+reencaminhar todos os pacotes wan com destino a uma dada porta (por exemplo,
+porta default para o server http, 80) para uma dada porta de um host, que terá
+um processo em modo listening associado a essa porta.
 
-\noindent Tux2 -> net,\\
-172.16.51.1(tux1,eth0) -> 172.16.51.254(routerCisco, eth0) -> 172.16.1.254(routerCisco, eth1)\\
-
-\noindent Tux4 -> net,\\
-172.16.51.254(tux4,eth1) -> 172.16.51.254(routerCisco, eth0) -> 172.16.1.254(routerCisco, eth1)\\
-
-\noindent Tux1 -> Tux2,\\
-172.16.50.1(tux1) -> 172.16.50.254(tux4, eth0) -> 172.16.51.1(tux2)\\
-
-\noindent Tux2 -> Tux1,\\
-172.16.51.1(tux2) -> 172.16.51.253(tux4,eth1) -> 172.16.50.1(tux1)\\
-
-\noindent Isto acontece devido às seguintes routes:\\
-
-\noindent Tux1,\\
-\begin{tabular}{l l l l l l l l}
-Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
-0.0.0.0 & 172.16.50.254 & 0.0.0.0 & UG & 0 & 0 & 0 & eth0 \\
-172.16.50.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth0
-\end{tabular}\\
-
-\noindent Tux2,\\
-\begin{tabular}{l l l l l l l l}
-Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
-0.0.0.0 & 172.16.51.254 & 0.0.0.0 & UG & 0 & 0 & 0 & eth0 \\
-172.16.50.0 & 172.16.51.253 & 255.255.255.0 & UG & 0 & 0 & 0 & eth0 \\
-172.16.51.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth0
-\end{tabular}\\
-
-\noindent Tux4,\\
-\begin{tabular}{l l l l l l l l}
-Destination & Gateway & Genmask & Flags & Metric & Ref & Use & Iface \\
-0.0.0.0 & 172.16.51.254 & 0.0.0.0 & UG & 0 & 0 & 0 & eth1 \\
-172.16.50.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth0 \\
-172.16.51.0 & 0.0.0.0 & 255.255.255.0 & U & 0 & 0 & 0 & eth1
-\end{tabular}\\
-
-\noindent Router Cisco,\\
-ip route 0.0.0.0 0.0.0.0 172.16.1.254\\
-ip route 172.16.50.0 255.255.255.0 172.16.51.253
-
-\subsubsection{What does NAT do?}
-Esta técnica permite que se possa utilizar os mesmos ips em diferentes redes, chamadas redes privadas(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Isto é possível porque os ips privados são traduzidos para um público. Este mapeamento é feito através de uma tabela chamada tabela de tradução de endereços de rede, que possibilita que o router saiba para que hosts são destinados certos pacotes vindos da internet. Cada entrada da tabela tem uma parte para o lado WAN e outra para o lado LAN, cada um deles tem dois campos: um para o ip e a outra para a porta. A porta é o que permite fazer a distinção entre destinos de pacotes. É possível reencaminhar todos os pacotes wan com destino a uma dada porta (por exemplo, porta default para o server http, 80) para uma dada porta de um host, que terá um processo em modo listening associado a essa porta.
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{exp4_nat.png}
+    \caption{Há resposta visto NAT estar configurado}
+\end{figure}
 
 \subsection{Experiência 5}
 
