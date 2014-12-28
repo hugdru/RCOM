@@ -44,7 +44,7 @@ permitindo obter um conhecimento detalhado deste. Os ficheiros de análise
 usados para chegar às conclusões presentes ao longo do relatório encontram-se
 na pasta parte2 e o código da aplicação ftp na pasta parte1. Só não foram colocados os ficheiros da última experiência devido ao tamanho dos mesmos.
 
-\section{Parte 1}
+\section{Parte 1 - Desenvolvimento de uma aplicação de download}
 
 \begin{figure}[h]
     \centering
@@ -67,9 +67,9 @@ Cada um das strings da estrutura URL correspondem a parâmetros necessários no 
 \subsubsection{Successful Download}
 Foi testado a aplicação de download usando vários servidores FTP da FEUP, incluindo ftp.up.pt, pinguim.fe.up.pt e mirrors.fe.up.pt. Todos os download foram efetuados com sucesso, incluindo os testados na experiência 6 e na demostração da aplicação.
 
-\section{Parte 2}
+\section{Parte 2 - Configuração e Estudo de uma Rede}
 
-\subsection{Experiência 1}
+\subsection{Experiência 1 - Configurar um rede IP}
 
 \begin{figure}[h]
     \centering
@@ -148,7 +148,7 @@ interfaces virtuais(loopback) que permitem isso mesmo. Necessário para: testar
 configurações; correr servidores localmente; fazer simulações de redes; etc. De
 modo rápido.
 
-\subsection{Experiência 2}
+\subsection{Experiência 2 - Implementar de duas LANs virtuais num switch}
 
 \begin{figure}[h]
     \centering
@@ -201,7 +201,7 @@ Através dos logs verificamos que quando fazemos broadcast no tuxy1 só o tuxy4 
 fazemos broadcast no tuxy2 nenhuma máquina responde, porque não chega nenhum pedido às
 outras máquinas.
 
-\subsection{Experiência 3}
+\subsection{Experiência 3 - Configurar um Router em Linux}
 
 \begin{figure}[h]
     \centering
@@ -283,7 +283,7 @@ Após limpar as ARP tables das três máquinas fez-se ping do tuxy1 para o tuxy2
     \caption{Comunicações na interface eth0 do Tux4}
 \end{figure}
 
-\subsection{Experiência 4}
+\subsection{Experiência 4 - Configurar um Router Comercial e Implementar o NAT}
 
 \subsubsection{Objetivos}
 Configurar um router comercial configurado com NAT de modo a termos accesso à
@@ -389,7 +389,7 @@ um processo em modo listening associado a essa porta.
     \caption{Há resposta visto NAT estar configurado}
 \end{figure}
 
-\subsection{Experiência 5}
+\subsection{Experiência 5 - DNS}
 
 \subsubsection{Objetivos}
 Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à Internet através da rede previamente criada.
@@ -425,7 +425,24 @@ Response:
 	ftp.up.pt: type A, class IN, addr 193.136.37.8, Time to live: 3616, Data length: 4
 \end{verbatim}
 
+\subsection{Experiência 6 - Ligações TCP}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.50\textwidth]{ArquitecturaNasExperiencias/exp6.png}
+    \caption{Arquitetura da experiência 6}
+\end{figure}
+
+\subsubsection{Objetivos}
+Estudo das ligações TCP de dados e controlo e as suas fases; estudo das ligações FTP; Estudo do mecanismo TCP ARQ e mecanismo de controlo de congestionamento TCP.
+
+Foi compilada a aplicação de download desenvolvida e descrita na parte 1 do presente relatório.
+\subsubsection{Comandos principais de configuração}
+
+\subsubsection{Análise das capturas}
+
 \subsection{Experiência 6}
+
 
 \subsubsection{How many TCP connections are opened by your ftp application?}
 
