@@ -108,26 +108,45 @@ arp -d ipaddress
 Uma vez que foram apagadas as linhas da arp table torna-se crucial investigar
 que máquina tem um dado ip. Tal é visível nos logs do wireshark, devido ao ping
 que fizemos para o tux4(ping 172.16.50.254). Do tux1 é feito um broadcast de
-uma trama ARP Request, que contém: o endereço IP do alvo; e a sua informação,
+uma trama do tipo ARP (Opcode) Request, que contém: o endereço IP do alvo; e a sua informação,
 ip e mac. Ficando à espera da resposta do alvo. Quando o tux4 capta esta
 mensagem, aceita-a porque tem o mesmo ip que o ip destino, e envia em unicast
-um pacote ARP Reply contendo o seu endereço MAC, juntamento com todos os outros
-dados. Quando o tux1 recebe esta mensagem é inserida uma entrada na sua ARP
-table, com o IP (network layer) e mac address (link layer) do tux4. O mesmo
-acontece ao tux4 se tiver a ARP table sem uma linha para 172.16.50.1. Para além
-disto, observámos que o comando ping gera um pacote Echo Request e espera por
-um Echo Reply do host alvo, sendo que os endereços do network layer e da link
-layer estão bem definidos e encontram-se respetivamente: na header do pacote, e
-no header do EthernetII Frame. Verificou-se também que há um campo na header da
-EthernetII frame que indica o tipo de protocolo, por exemplo se é ARP, IP ou
-ICMP. No entanto, não existe nenhum campo em que seja especificado o tamanho da
-trama (ao contrário do que acontece no pacote IP). Isto, deve-se ao facto do
-Physical Layer ter mecanismos de reconhecimento do início e fim de uma trama,
-dependentes da codificação e do meio de transmissão. Concluímos também que não
-é necessário haver um switch para uma máquina falar com ela própria, uma vez
-que existe uma rede de interfaces virtuais(loopback) que permitem isso mesmo.
-Necessário para: testar configurações; correr servidores localmente; fazer
-simulações de redes; etc. De modo rápido.
+uma trama do tipo ARP Reply contendo o seu endereço MAC, juntamento com todos os outros
+dados.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{exp1_arp.png}
+    \caption{Trama EthernetII do tipo ARP}
+\end{figure}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.60\textwidth]{exp1_arpBroadcast.png}
+    \caption{Payload da trama EthernetII do tipo ARP, mais concretamente Request}
+\end{figure}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.60\textwidth]{exp1_arpReply.png}
+    \caption{Payload da trama EthernetII do tipo ARP, mais concretamente Reply}
+\end{figure}
+
+Quando o tux1 recebe esta mensagem é inserida uma entrada na sua ARP table, com
+o IP (network layer) e mac address (link layer) do tux4. O mesmo acontece ao
+tux4 se tiver a ARP table sem uma linha para 172.16.50.1. Para além disto,
+observámos que o comando ping gera um pacote Echo Request e espera por um Echo
+Reply do host alvo, sendo que os endereços do network layer e da link layer
+estão bem definidos e encontram-se respetivamente: na header do pacote, e no
+header do EthernetII Frame(depende das máquinas pode onde a trama passa).
+Verificou-se também que há um campo na header da EthernetII frame que indica o
+tipo de protocolo, por exemplo se é ARP, IP ou ICMP. No entanto, não existe
+nenhum campo em que seja especificado o tamanho da trama (ao contrário do que
+acontece no pacote IP). Isto, deve-se ao facto do Physical Layer ter mecanismos
+de reconhecimento do início e fim de uma trama, dependentes da codificação e do
+meio de transmissão. Concluímos também que não é necessário haver um switch
+para uma máquina falar com ela própria, uma vez que existe uma rede de
+interfaces virtuais(loopback) que permitem isso mesmo. Necessário para: testar
+configurações; correr servidores localmente; fazer simulações de redes; etc. De
+modo rápido.
 
 \subsection{Experiência 2}
 
@@ -162,8 +181,17 @@ Verificando as configurações:
 \begin{verbatim}
 show running-config interface fastEthernet 0/porta
 show interfaces fastEthernet 0/porta switchport
+\end{verbatim}
+
+Por exemplo:
+\begin{verbatim}
 50	VLAN0050									active		Fa0/1, Fa0/2
 51 	VLAN0051									active		Fa0/3
+\end{verbatim}
+
+De modo a não serem ignorados broadcasts de icmp echo:
+\begin{verbatim}
+echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
 \end{verbatim}
 
 \subsubsection{Análise das capturas}
@@ -247,7 +275,13 @@ HWaddr 00:21:5a:61:2f:d6, é o mac address da interface eth0(172.16.51.1) do tux
 \subsubsection{Análise das capturas}
 Pode-se observar nos logs que naturalmente depois da configurações referidas é possível fazer ping do tuxy1 para todas as outras interfaces.
 Após limpar as ARP tables das três máquinas fez-se ping do tuxy1 para o tuxy2, e é possível observar nos logs que uma vez que a ethernet usa MAC addresses e a ARP table foi limpa, o tuxy1 precisa de saber qual o mac address da interface eth0 do tuxy4, o tuxy4 precisa de saber o mac do tuxy2, o tuxy2 o mac do eth1 tuxy4, e o tuxy4 o mac do tuxy1. Tuxy1 envia um ARP request para obter o MAC address de eth0 tuxy4 e tuxy2 envia um ARP request a eth1 tuxy4.
-É possível observar também que porque os pacotes echo, pacotes ICMP presentes nos logs, são reencaminhados para o tuxy4, eles são visíveis pelo tuxy4, em ambas as interfaces.
+É possível observar também que porque os pacotes echo, pacotes ICMP request(tipo 8) e reply(tipo 0) presentes nos logs, são reencaminhados para o tuxy4. Estes são visíveis pelo tuxy4, em ambas as interfaces. Acontece uma coisa um pouco estranha que é o facto do tux3 parecer estar a fazer reply sem antes saber o mac do tux4 eth1 (através dos logs do wireshark). Só depois de algum tempo é que se vê o broadcast ARP a partir do tux3. Pensamos que isto é devido ao tux3 ter respondido ao broadcast do tux4, e de ter ficado de modo implícito com o mac do tux4 eth1 em cache, sendo só depois feito o pedido formal. O mesmo acontece do tux4 para o tux1.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{exp3_logs.png}
+    \caption{Comunicações na interface eth0 do Tux4}
+\end{figure}
 
 \subsection{Experiência 4}
 
