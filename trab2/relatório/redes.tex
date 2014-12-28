@@ -436,7 +436,12 @@ Response:
 \subsubsection{Objetivos}
 Estudo das ligações TCP de dados e controlo e as suas fases; estudo das ligações FTP; Estudo do mecanismo TCP ARQ e mecanismo de controlo de congestionamento TCP.
 
-Foi compilada a aplicação de download desenvolvida e descrita na parte 1 do presente relatório.
+Foi compilada a aplicação de download desenvolvida e descrita na parte 1 do presente relatório e usada para o download de um ficheiro presente num servidor FTP. O download foi concluído com sucesso, e logs analisados.
+
+São abertas duas conexões TCP pela aplicação FTP, uma de controlo e outra de dados. Primeiramente a aplicação cria uma conexão TCP de controlo que conecta um porto sem privilégios (porto > 1023) ao porto FTP do servidor (porto 21) que vai continuar aberta durante a transferência. Foi utilizado nesta aplicação o modo passivo por oposição ao modo activo. No modo activo o cliente envia o número do porto sem privilégios para o servidor se conectar. Por outro lado, no modo passivo, é o servidor que envia o número de uma das suas portas sem privilégios para que o cliente se conecte.
+
+A informação de controlo FTP é transportada na conexão de controlo, para além das mensagens de acknowledgement(ACK).
+
 \subsubsection{Comandos principais de configuração}
 
 \subsubsection{Análise das capturas}
