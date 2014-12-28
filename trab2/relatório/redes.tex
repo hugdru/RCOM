@@ -332,24 +332,41 @@ end
 
 \subsubsection{What does NAT do?}
 Esta técnica permite que se possa utilizar os mesmos ips em diferentes redes, chamadas redes privadas(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Isto é possível porque os ips privados são traduzidos para um público. Este mapeamento é feito através de uma tabela chamada tabela de tradução de endereços de rede, que possibilita que o router saiba para que hosts são destinados certos pacotes vindos da internet. Cada entrada da tabela tem uma parte para o lado WAN e outra para o lado LAN, cada um deles tem dois campos: um para o ip e a outra para a porta. A porta é o que permite fazer a distinção entre destinos de pacotes. É possível reencaminhar todos os pacotes wan com destino a uma dada porta (por exemplo, porta default para o server http, 80) para uma dada porta de um host, que terá um processo em modo listening associado a essa porta.
-\subsection{Experiência 5}
 
-\subsubsection{How to configure the DNS service at an host?}
+\subsection{Experiência 3}
 
-Para configurar o serviço DNS alterou-se o ficheiro resolv.conf localizado no diretório /etc do host.
-Nesta experiência o conteúdo deste ficheiro foi alterado para:
+\subsubsection{Objetivos}
+Configurar o DNS de modo a conseguir acessar a redes externas, acedendo à Internet através da rede previamente criada.
+
+Para configurar o serviço DNS alterou-se o ficheiro /etc/resolv.conf, em cada uma das máquinas. Nesta experiência o conteúdo deste ficheiro foi alterado para:
 
 \begin{verbatim}
-search lixa.netlab.fe.up.pt
-nameserver 172.16.1.1
+	search lixa.netlab.fe.up.pt
+	nameserver 172.16.1.1
 \end{verbatim}
 
-\noindent 172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos.
-lixa.netlab.fe.up.pt, é o única elemento da lista de procura de hostnames.
+172.16.1.1, é o endereço do servidor de nomes para onde se fazem os pedidos. lixa.netlab.fe.up.pt, é o único elemento da lista de procura de hostnames.
 
-\subsubsection{What packets are exchanged by DNS and what information is transported?}
+Existem três tipos de pacotes DNS: Queries, Responses e Updates. Os pacotes query e reponses(replies) têm um formato comum, para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. O pacote de update contém à semelhança dos outros um header com: uma identificação; flags; e, número de registo de recursos(RRs) para cada tipo da secção seguinte: zone entry; prerequisite resource records; update resource records; e, additional resource records.
 
-Existem três tipos de DNS packets: Queries, Responses e Updates. Os pacotes de DNS queries e reponses(replies) têm um formato comum, para além dos 12 bytes do cabeçalho: identificação; flags; número de perguntas; número de respostas de RRs; número de registos de servidores authoritative; e, número adicional de RRs. São enviadas: perguntas com os campos nome e tipo(A, NS, CNAME e MX) selecionados; respostas a uma pergunta, RRs completos; registo de servidores authoritative; e, informação adicional útil. O pacote de update contém à semelhança dos outros um header com: uma identificação; flags; e, número de registo de recursos(RRs) para cada tipo da secção seguinte: zone entry; prerequisite resource records; update resource records; e, additional resource records.
+\subsubsection{Análise das capturas}
+
+É possível verificar a troca de pacotes DNS no início da ligação à Internet:
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{exp5_dns.png}
+    \caption{Pacotes DNS - Query e Response}
+\end{figure}
+
+Query:
+\begin{verbatim}
+	ftp.up.pt: type A, class IN
+\end{verbatim}
+Response:
+\begin{verbatim}
+	ftp.up.pt: type A, class IN, addr 193.136.37.8, Time to live: 3616, Data length: 4
+\end{verbatim}
+
 \subsection{Experiência 6}
 
 \subsubsection{How many TCP connections are opened by your ftp application?}
